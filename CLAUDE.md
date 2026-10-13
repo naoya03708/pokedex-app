@@ -7,11 +7,17 @@ macOS (arm64) と Windows 向けに配布する。ビルドとリリースは Gi
 - 開発は devcontainer 上 (`scripts/dev.sh`)。非 root ユーザー `dev`。Go 1.27、gh、Claude Code が入っている。
 - **ビルド成果物の配布用ビルドはローカルでやらない**。ビルドは GitHub Actions に任せる。ローカルで行うのは編集、`go vet`、`go test` まで。
 - GUI はコンテナ内で表示できない。UI の確認は `ui.NewTester` によるテストと、CI が作った成果物を Mac / Windows で起動して行う。
-- リポジトリは **Private**。シークレットや個人情報をコミットしない。
+- リポジトリは **Private** (v0.1.0 後に Public 化予定。チェックリストは `docs/development.md`)。シークレットや個人情報をコミットしない。
 - MyGo の native UI の注意点は `.agents/skills/mygo-maintenance/SKILL.md` を読む。特に、要素を状態に保存しない、遅い I/O は UI スレッドの外で行い `Window.Update` で結果を反映する、の2点。
 - MyGo の docs: https://github.com/egoist/mygo/tree/main/docs 、実装は `go list -m -f '{{.Dir}}' github.com/egoist/mygo` で読める。
 
-## やること (上から順に)
+## 要件と開発プロセス
+- 要件: `docs/requirements.md` (FR-n と受入条件)。プロセス: `docs/development.md`。作業前に読む。
+- 受入条件駆動 + TDD: 要件 → 失敗するテスト (テスト名に FR ID) → 実装 → リファクタ。
+- 機能ごとにブランチ + PR (Conventional Commits、英語)。Claude は PR 作成と CI 確認まで。マージ・タグ push・リポジトリ設定はユーザー。main に直接 push しない。
+- PR 前に Definition of Done (`docs/development.md`) を満たす。
+
+## やること (上から順に。各項目は PR 単位で進める)
 
 ### 1. リポジトリ作成
 - [x] `gh auth status` でログイン確認 (未ログインならユーザーに依頼)
@@ -27,7 +33,7 @@ macOS (arm64) と Windows 向けに配布する。ビルドとリリースは Gi
 ### 3. PokeAPI クライアント (`internal/pokeapi`)
 - [ ] 名前一覧の取得 (`/pokemon?limit=100000`)。PokeAPI に検索エンドポイントはないので、一覧をディスクにキャッシュして**クライアント側で絞り込む**
 - [ ] 詳細取得 (`/pokemon/{name}`: タイプ、種族値、スプライト)
-- [ ] 日本語名 (`/pokemon-species/{id}` の `names`) を扱うか決める
+- [x] 日本語名 (`/pokemon-species/{id}` の `names`) を扱うか決める → v0.1 では扱わない
 - [ ] `http.Client` にタイムアウト、`context` 対応、キャッシュ (Fair use のため同じ取得を繰り返さない)
 - [ ] `httptest` で外部通信なしのテストを書く
 
@@ -38,7 +44,8 @@ macOS (arm64) と Windows 向けに配布する。ビルドとリリースは Gi
 - [ ] `ui.NewTester` で操作テスト
 
 ### 5. CI (`.github/workflows/ci.yml`)
-- [ ] push と PR で `gofmt -l`、`go vet`、`go test -race`
+- [ ] push と PR で `gofmt -l`、`go vet`、`go tool staticcheck` (go.mod の `tool` で固定)、`go tool mygo vet .`、`go test -race -cover` (カバレッジを Job Summary に出す)
+- [ ] ubuntu のみで実行 (macOS runner はリリース時だけ)
 - [ ] アクションはバージョン固定、`permissions: contents: read`
 
 ### 6. リリース (`.github/workflows/release.yml`)

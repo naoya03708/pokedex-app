@@ -15,5 +15,4 @@ exec docker run --rm -i $TTY \
   -v pokedex-app-claude:/home/dev/.claude-config \
   -e GOFLAGS=-buildvcs=false \
   -e GIT_AUTHOR_NAME="$(git config user.name)" -e GIT_COMMITTER_NAME="$(git config user.name)" \
-  -e GIT_AUTHOR_EMAIL="$(git config user.email)" -e GIT_COMMITTER_EMAIL="$(git config user.email)" \
   pokedex-dev "${@:-bash}"
