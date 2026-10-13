@@ -44,9 +44,10 @@ macOS (arm64) と Windows 向けに配布する。ビルドとリリースは Gi
 - [ ] `ui.NewTester` で操作テスト
 
 ### 5. CI (`.github/workflows/ci.yml`)
-- [ ] push と PR で `gofmt -l`、`go vet`、`go tool staticcheck` (go.mod の `tool` で固定)、`go tool mygo vet .`、`go test -race -cover` (カバレッジを Job Summary に出す)
-- [ ] ubuntu のみで実行 (macOS runner はリリース時だけ)
-- [ ] アクションはバージョン固定、`permissions: contents: read`
+- [x] push と PR で `gofmt -l`、`go vet`、`go tool mygo vet .`、`go test -race -cover` (カバレッジを Job Summary に出す)
+- [x] ubuntu のみで実行 (macOS runner はリリース時だけ)
+- [x] アクションはコミット SHA で固定、`permissions: contents: read`
+- [ ] **2026-10-26 以降**: `go get -tool honnef.co/go/tools/cmd/staticcheck@v0.8.2` で staticcheck を追加し、CI と DoD に入れる (v0.8.1 以前は Go 1.27 非対応。v0.8.2 は 2026-10-12 公開のため 2 週間待つ)
 
 ### 6. リリース (`.github/workflows/release.yml`)
 - [ ] `v*` タグの push で起動、`permissions: contents: write`

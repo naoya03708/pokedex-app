@@ -60,14 +60,14 @@ PR は、次をすべて満たしてからレビューに出す。
 
 - [ ] `gofmt -l .` の出力が空
 - [ ] `go vet ./...`
-- [ ] `go tool staticcheck ./...` (staticcheck は go.mod の `tool` でバージョンを固定する)
+- [ ] `go tool staticcheck ./...` (staticcheck は go.mod の `tool` でバージョンを固定する)。※ Go 1.27 に対応した v0.8.2 は公開から 2 週間待つため、2026-10-26 以降に追加する。それまではこの項目を省く
 - [ ] `go tool mygo vet .`
 - [ ] `go test -race -cover ./...`
 - [ ] 関係する要件のテストを追加・更新した
 - [ ] 必要に応じて docs と `CHANGELOG.md` の `[Unreleased]` を更新した
 - [ ] CI が green
 
-CI は ubuntu だけで回す。macOS runner は Private リポジトリでは消費が大きいので、リリースのときだけ使う。
+CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確かめる。カバレッジは Job Summary に出す。macOS runner は Private リポジトリでは消費が大きいので、リリースのときだけ使う。
 
 ## バージョンとリリース
 - [SemVer](https://semver.org/) に従う。1.0.0 までは、破壊的な変更があれば MINOR を上げる。
