@@ -1,12 +1,12 @@
 # pokedex-app
 
 PokeAPI (https://pokeapi.co) を検索する、MyGo の native UI 製デスクトップアプリ。
-macOS (arm64) と Windows 向けに配布する。ビルドとリリースは GitHub Actions が行う。
+macOS (arm64) 向けに配布する (Windows は v0.1.0 では見送り)。ビルドとリリースは GitHub Actions が行う。
 
 ## 開発環境のルール
 - 開発は devcontainer 上 (`scripts/dev.sh`)。非 root ユーザー `dev`。Go 1.27、gh、Claude Code が入っている。
 - **ビルド成果物の配布用ビルドはローカルでやらない**。ビルドは GitHub Actions に任せる。ローカルで行うのは編集、`go vet`、`go test` まで。
-- GUI はコンテナ内で表示できない。UI の確認は `ui.NewTester` によるテストと、CI が作った成果物を Mac / Windows で起動して行う。
+- GUI はコンテナ内で表示できない。UI の確認は `ui.NewTester` によるテストと、CI が作った成果物を Mac で起動して行う。
 - リポジトリは **Private** (v0.1.0 後に Public 化予定。チェックリストは `docs/development.md`)。シークレットや個人情報をコミットしない。
 - MyGo の native UI の注意点は `.agents/skills/mygo-maintenance/SKILL.md` を読む。特に、要素を状態に保存しない、遅い I/O は UI スレッドの外で行い `Window.Update` で結果を反映する、の2点。
 - MyGo の docs: https://github.com/egoist/mygo/tree/main/docs 、実装は `go list -m -f '{{.Dir}}' github.com/egoist/mygo` で読める。
@@ -54,17 +54,17 @@ macOS (arm64) と Windows 向けに配布する。ビルドとリリースは Gi
 ### 6. リリース (`.github/workflows/release.yml`)
 - [x] `v*` タグの push で起動、`permissions: contents: write`
 - [x] macOS: `macos-latest` で `go tool mygo build -platform darwin/arm64`、アドホック署名、dmg
-- [ ] Windows: ビルド方法を決める (NSIS 入りのインストーラ、または exe の zip)
+- [x] ~~Windows: ビルド方法を決める~~ v0.1.0 では見送り (2026-10-13 に決定。要件の範囲外に移した)
 - [x] 成果物を GitHub Release に添付 (`gh release create` / `gh release upload`)
 - [ ] Private リポジトリでは Actions の無料枠に分数制限があり、macOS runner は消費が大きい点に注意
 
 ### 7. 動作確認と公開
 - [ ] `v0.1.0` タグでリリースし、成果物を Mac で起動して確認
-- [ ] 未署名なので初回起動は Gatekeeper / SmartScreen の警告が出る。手順を README に書く
-- [ ] README (使い方、ビルド、リリース手順) を書く
+- [x] 未署名なので初回起動は Gatekeeper の警告が出る。手順を README に書く
+- [x] README (使い方、ビルド、リリース手順) を書く (スクリーンショットは Public 化前のチェックリストで追加)
 
 ## 決定事項
 - オーナー: `naoya03708`。モジュール `github.com/naoya03708/pokedex-app`、identifier `com.github.naoya03708.pokedex` (変更しない)
-- Windows: exe の zip で配布
+- Windows: v0.1.0 では見送り (2026-10-13)。再開するときは exe の zip を想定
 - macOS: `arm64` のみ
 - 日本語名検索: 当面は対応しない (英語名のみ。後で追加を検討)

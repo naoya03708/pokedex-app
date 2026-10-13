@@ -5,7 +5,7 @@ PokeAPI (https://pokeapi.co) を引くデスクトップ図鑑アプリ。ポー
 
 - MyGo の native UI によるデスクトップアプリ
 - 要件からテスト、実装へとつながる開発プロセス (`docs/development.md`)
-- GitHub Actions による CI と、macOS / Windows 向けの配布
+- GitHub Actions による CI と、macOS 向けの配布
 
 想定ユーザーは、ポケモンを名前で引いて基本情報を見たい人と、このリポジトリを読む人 (レビュアーや採用担当者)。
 
@@ -45,8 +45,8 @@ PokeAPI (https://pokeapi.co) を引くデスクトップ図鑑アプリ。ポー
 | キャッシュ | 置き場所は `os.UserCacheDir()/pokedex`。名前一覧の有効期限は 7 日。詳細は無期限 (内容がほぼ変わらないため) |
 | オフライン | キャッシュにあるものは表示する。キャッシュにないものは FR-3 のエラー表示にする |
 | プライバシー | テレメトリは送らない。外部通信の相手は pokeapi.co と画像の取得先だけ |
-| 対応 OS | macOS (arm64)、Windows (x64) |
-| 配布 | macOS はアドホック署名した dmg。Windows は exe の zip。どちらも GitHub Release に添付する |
+| 対応 OS | macOS (arm64)。Windows は v0.1.0 の範囲外 |
+| 配布 | アドホック署名した dmg と SHA-256 のチェックサムを GitHub Release に添付する (下書き → ユーザーが公開) |
 | UI の言語 | 英語 |
 | 品質 | `internal/pokeapi` と `internal/app` のテストカバレッジは 80% 以上。テストは外部通信しない (`httptest` や fake を使う) |
 
@@ -54,6 +54,7 @@ PokeAPI (https://pokeapi.co) を引くデスクトップ図鑑アプリ。ポー
 - 日本語名の表示と検索 (`/pokemon-species/{id}` の `names`)
 - お気に入り
 - タイプでの絞り込み、進化の表示
+- Windows 対応 (exe の zip を想定。MyGo は cgo 不要なので Linux runner でクロスビルドできる見込み。実機での確認が必要)
 - macOS の universal バイナリ
 - コード署名と公証 (notarization)
 

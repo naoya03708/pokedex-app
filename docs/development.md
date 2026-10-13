@@ -88,7 +88,7 @@ CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確�
 - 手順:
   1. `CHANGELOG.md` の `[Unreleased]` を `[X.Y.Z] - YYYY-MM-DD` にし、`mygo.json` の `version` を合わせる PR を出してマージする
   2. ユーザーが `vX.Y.Z` タグを main に push する
-  3. `release.yml` が動く (下記)。macOS (dmg) を GitHub Release の**下書き**に添付する。Windows (zip) は未対応
+  3. `release.yml` が動く (下記)。macOS (dmg) を GitHub Release の**下書き**に添付する (Windows は v0.1.0 の範囲外)
   4. ユーザーが下書きの内容 (ノート、dmg、`SHA256SUMS.txt`) を確認し、**公開する**
   5. 成果物を Mac で起動して確認する
 
@@ -110,6 +110,6 @@ CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確�
 ## Public にする前のチェックリスト
 - [ ] 履歴全体にシークレットや個人情報がないことを確認する (`git log --all --format='%ae %ce' | sort -u` の結果が noreply だけ、など)
 - [ ] LICENSE を追加する
-- [ ] README にスクリーンショットとインストール手順 (Gatekeeper / SmartScreen の回避方法を含む) を載せる
+- [ ] README にスクリーンショットとインストール手順 (Gatekeeper の回避方法を含む) を載せる
 - [ ] リポジトリの description と topics を設定する
 - [ ] main のブランチ保護を設定する
