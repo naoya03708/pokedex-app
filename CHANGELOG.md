@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-14
+
+First release: a desktop Pokédex for macOS (Apple silicon) backed by [PokeAPI](https://pokeapi.co).
+
 ### Added
 - PokeAPI client (`internal/pokeapi`): name list and Pokémon detail with 10 s timeout, `context` cancellation, memory and disk cache (list expires after 7 days, details never; stale list is served when offline).
 - App model (`internal/app`): case-insensitive name filtering, loading/error states with retry, and rejection and cancellation of stale detail fetches.
 - Sprite images: fetched as PNG bytes, cached in memory and on disk without expiry, and loaded after the detail text so a failed image never hides the detail.
 - Native window UI (`internal/ui`): search box, result list with keyboard navigation (Up/Down move, Enter selects), detail pane with sprite, types and base-stat bars, and loading, error (with Retry) and "No Pokémon found" states.
+- Release workflow: a `vX.Y.Z` tag builds the macOS arm64 disk image and attaches it, with a SHA-256 checksum, to a draft GitHub Release.
+
+### Notes
+- macOS (Apple silicon, arm64) only. Windows and Intel Macs are not supported yet.
+- The app is ad-hoc signed, not notarized, so macOS shows a warning on first launch. Open it from System Settings > Privacy & Security > "Open Anyway" (see the README).
+- UI language is English; searching by Japanese name is not supported yet.
