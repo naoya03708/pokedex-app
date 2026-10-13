@@ -33,11 +33,11 @@ macOS (arm64) と Windows 向けに配布する。ビルドとリリースは Gi
 - [x] 必要なら `.claude/settings.json` に `go test`、`go vet` などの許可を追加
 
 ### 3. PokeAPI クライアント (`internal/pokeapi`)
-- [ ] 名前一覧の取得 (`/pokemon?limit=100000`)。PokeAPI に検索エンドポイントはないので、一覧をディスクにキャッシュして**クライアント側で絞り込む**
-- [ ] 詳細取得 (`/pokemon/{name}`: タイプ、種族値、スプライト)
+- [x] 名前一覧の取得 (`/pokemon?limit=100000`)。PokeAPI に検索エンドポイントはないので、一覧をディスクにキャッシュして**クライアント側で絞り込む**
+- [x] 詳細取得 (`/pokemon/{name}`: タイプ、種族値、スプライト)
 - [x] 日本語名 (`/pokemon-species/{id}` の `names`) を扱うか決める → v0.1 では扱わない
-- [ ] `http.Client` にタイムアウト、`context` 対応、キャッシュ (Fair use のため同じ取得を繰り返さない)
-- [ ] `httptest` で外部通信なしのテストを書く
+- [x] `http.Client` にタイムアウト、`context` 対応、キャッシュ (Fair use のため同じ取得を繰り返さない)
+- [x] `httptest` で外部通信なしのテストを書く
 
 ### 4. UI (native)
 - [ ] 検索ボックスと結果リスト、詳細ペイン (画像、タイプ、種族値)
