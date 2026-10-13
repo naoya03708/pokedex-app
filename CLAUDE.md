@@ -52,10 +52,10 @@ macOS (arm64) と Windows 向けに配布する。ビルドとリリースは Gi
 - [ ] **2026-10-26 以降**: `go get -tool honnef.co/go/tools/cmd/staticcheck@v0.8.2` で staticcheck を追加し、CI と DoD に入れる (v0.8.1 以前は Go 1.27 非対応。v0.8.2 は 2026-10-12 公開のため 2 週間待つ)
 
 ### 6. リリース (`.github/workflows/release.yml`)
-- [ ] `v*` タグの push で起動、`permissions: contents: write`
-- [ ] macOS: `macos-latest` で `go tool mygo build -platform darwin/arm64`、アドホック署名、dmg
+- [x] `v*` タグの push で起動、`permissions: contents: write`
+- [x] macOS: `macos-latest` で `go tool mygo build -platform darwin/arm64`、アドホック署名、dmg
 - [ ] Windows: ビルド方法を決める (NSIS 入りのインストーラ、または exe の zip)
-- [ ] 成果物を GitHub Release に添付 (`gh release create` / `gh release upload`)
+- [x] 成果物を GitHub Release に添付 (`gh release create` / `gh release upload`)
 - [ ] Private リポジトリでは Actions の無料枠に分数制限があり、macOS runner は消費が大きい点に注意
 
 ### 7. 動作確認と公開

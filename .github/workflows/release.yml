@@ -1,0 +1,136 @@
+name: Release
+
+# Pushing a tag vX.Y.Z builds the macOS app and attaches it to a DRAFT GitHub
+# Release. Publishing the draft is a manual step. See docs/development.md.
+#
+# Run manually (Actions > Release > Run workflow) on any branch for a dry run:
+# the checks, the build and the signature verification run, but no release is
+# created, so the macOS path can be tried before tagging.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One release run per tag; never cancel a run that is publishing.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Cheap gate on Linux before the expensive macOS runner starts.
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Tag matches mygo.json and CHANGELOG
+        if: github.ref_type == 'tag'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(jq -r .version mygo.json)
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::Tag $TAG does not match mygo.json version $version"
+            exit 1
+          fi
+          if ! grep -q "^## \[$version\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no [$version] section"
+            exit 1
+          fi
+
+      # Same steps as the CI check job, read from ci.yml.
+      - name: CI checks
+        run: scripts/check.sh
+
+  package-macos:
+    needs: verify
+    # macOS runners use far more of the private-repo minutes: release only.
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # create the draft release and upload to it
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # Ad-hoc signed app and a disk image, in build/darwin-arm64/.
+      - name: Build
+        run: go tool mygo build -platform darwin/arm64
+
+      # GitHub turns spaces in asset names into dots, so the disk image gets a
+      # space-free name before the checksum is written.
+      - name: Verify the app and name the artifacts
+        run: |
+          set -euo pipefail
+          dir=build/darwin-arm64
+          app=$(ls -d "$dir"/*.app)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+          test "$(lipo -archs "$app/Contents/MacOS/$exe")" = "arm64"
+          version=$(jq -r .version mygo.json)
+          dmg="$dir/Pokedex-$version-macos-arm64.dmg"
+          mv -- "$(ls "$dir"/*.dmg)" "$dmg"
+          (cd "$dir" && shasum -a 256 -- "$(basename "$dmg")" > SHA256SUMS.txt)
+          cat "$dir/SHA256SUMS.txt"
+          echo "DMG=$dmg" >> "$GITHUB_ENV"
+          echo "SUMS=$dir/SHA256SUMS.txt" >> "$GITHUB_ENV"
+
+      # A dry run leaves the disk image to download and try on a Mac.
+      - name: Keep the disk image of a dry run
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos-arm64-dry-run
+          path: |
+            ${{ env.DMG }}
+            ${{ env.SUMS }}
+          retention-days: 1
+          if-no-files-found: error
+
+      # The release notes are the version's CHANGELOG section.
+      - name: Release notes
+        if: github.ref_type == 'tag'
+        run: |
+          version=${TAG#v}
+          awk -v v="$version" '
+            /^## \[/ { if (found) exit; if (index($0, "## [" v "]") == 1) found = 1; next }
+            /^\[[^]]+\]: / { if (found) exit }  # link references at the bottom
+            found
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          test -s "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Draft release and upload
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            # A tag such as v1.0.0-rc1 is a prerelease. (No bash array here:
+            # macOS bash 3.2 fails on an empty one under `set -u`.)
+            prerelease=""
+            case "$TAG" in *-*) prerelease="--prerelease" ;; esac
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --draft --verify-tag --title "$TAG" \
+              --notes-file "$RUNNER_TEMP/notes.md" ${prerelease:+"$prerelease"}
+          fi
+          # --clobber: re-running the job replaces the files of the draft.
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$DMG" "$SUMS"

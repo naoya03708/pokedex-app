@@ -88,8 +88,24 @@ CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確�
 - 手順:
   1. `CHANGELOG.md` の `[Unreleased]` を `[X.Y.Z] - YYYY-MM-DD` にし、`mygo.json` の `version` を合わせる PR を出してマージする
   2. ユーザーが `vX.Y.Z` タグを main に push する
-  3. `release.yml` が macOS (dmg) と Windows (zip) をビルドし、GitHub Release に添付する
-  4. 成果物を Mac と Windows で起動して確認する
+  3. `release.yml` が動く (下記)。macOS (dmg) を GitHub Release の**下書き**に添付する。Windows (zip) は未対応
+  4. ユーザーが下書きの内容 (ノート、dmg、`SHA256SUMS.txt`) を確認し、**公開する**
+  5. 成果物を Mac で起動して確認する
+
+### `release.yml` (CD)
+タグ `v*` の push で起動する。公開は人が行うので、これは継続的デリバリー (Continuous Delivery) で、自動公開ではない。
+
+| ジョブ | runner | 内容 |
+|---|---|---|
+| `verify` | ubuntu | タグが `mygo.json` の version と一致すること、`CHANGELOG.md` にその版の節があることを確認し、`scripts/check.sh` (CI の check ジョブと同じ) を実行する。落ちたら macOS runner は使わない |
+| `package-macos` | macos-latest | `go tool mygo build -platform darwin/arm64` (アドホック署名、dmg) → `codesign --verify` と arm64 の確認 → `Pokedex-X.Y.Z-macos-arm64.dmg` と `SHA256SUMS.txt` を作成 → CHANGELOG の節をノートにした下書きリリースを作り、添付する |
+
+- 権限は既定で `contents: read`。`contents: write` は `package-macos` だけに与える。
+- Actions タブの「Release」→ Run workflow で、任意のブランチから**ドライラン**できる。チェック、ビルド、署名の検証までは同じで、リリースは作らず、dmg と `SHA256SUMS.txt` を run の Artifacts (保持 1 日) に残す。タグを打つ前に macOS runner の経路を試し、dmg を Mac で起動して確かめるのに使う。
+- ジョブを再実行すると、下書きは残したまま、ファイルを置き換える (`--clobber`)。
+- `v1.2.3-rc1` のようにハイフンを含むタグは prerelease になる。ただし version の検査は厳密なので、`mygo.json` の version も同じにする必要がある。
+- macOS runner の分数は Private リポジトリでは消費が大きい。タグのときしか使わない。
+- アクションはコミット SHA で固定している。更新は ci.yml と同じ SHA にそろえる。
 
 ## Public にする前のチェックリスト
 - [ ] 履歴全体にシークレットや個人情報がないことを確認する (`git log --all --format='%ae %ce' | sort -u` の結果が noreply だけ、など)
