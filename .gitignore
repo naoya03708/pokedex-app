@@ -1,0 +1,4 @@
+/build/
+/out*
+/.mygo/
+mygo_windows_*.syso

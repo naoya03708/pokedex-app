@@ -1,0 +1,60 @@
+# pokedex-app
+
+PokeAPI (https://pokeapi.co) を検索する、MyGo の native UI 製デスクトップアプリ。
+macOS (arm64) と Windows 向けに配布する。ビルドとリリースは GitHub Actions が行う。
+
+## 開発環境のルール
+- 開発は devcontainer 上 (`scripts/dev.sh`)。非 root ユーザー `dev`。Go 1.27、gh、Claude Code が入っている。
+- **ビルド成果物の配布用ビルドはローカルでやらない**。ビルドは GitHub Actions に任せる。ローカルで行うのは編集、`go vet`、`go test` まで。
+- GUI はコンテナ内で表示できない。UI の確認は `ui.NewTester` によるテストと、CI が作った成果物を Mac / Windows で起動して行う。
+- リポジトリは **Private**。シークレットや個人情報をコミットしない。
+- MyGo の native UI の注意点は `.agents/skills/mygo-maintenance/SKILL.md` を読む。特に、要素を状態に保存しない、遅い I/O は UI スレッドの外で行い `Window.Update` で結果を反映する、の2点。
+- MyGo の docs: https://github.com/egoist/mygo/tree/main/docs 、実装は `go list -m -f '{{.Dir}}' github.com/egoist/mygo` で読める。
+
+## やること (上から順に)
+
+### 1. リポジトリ作成
+- [x] `gh auth status` でログイン確認 (未ログインならユーザーに依頼)
+- [x] `.gitignore` に `build/` と `out*` を含める
+- [x] `go.mod` のモジュール名を `github.com/<owner>/pokedex-app` に変更 (`go mod edit -module`)
+- [x] `mygo.json` の `identifier` を決める (例 `com.github.<owner>.pokedex`)。リリース後は変えない
+- [x] git init → 初回コミット → `gh repo create pokedex-app --private --source . --push`
+
+### 2. Claude Code 用の整備
+- [x] `.agents/skills/mygo-maintenance` を `.claude/skills/` からも使えるようにする (symlink か複製)
+- [x] 必要なら `.claude/settings.json` に `go test`、`go vet` などの許可を追加
+
+### 3. PokeAPI クライアント (`internal/pokeapi`)
+- [ ] 名前一覧の取得 (`/pokemon?limit=100000`)。PokeAPI に検索エンドポイントはないので、一覧をディスクにキャッシュして**クライアント側で絞り込む**
+- [ ] 詳細取得 (`/pokemon/{name}`: タイプ、種族値、スプライト)
+- [ ] 日本語名 (`/pokemon-species/{id}` の `names`) を扱うか決める
+- [ ] `http.Client` にタイムアウト、`context` 対応、キャッシュ (Fair use のため同じ取得を繰り返さない)
+- [ ] `httptest` で外部通信なしのテストを書く
+
+### 4. UI (native)
+- [ ] 検索ボックスと結果リスト、詳細ペイン (画像、タイプ、種族値)
+- [ ] 読み込み中・エラー・0件の表示
+- [ ] ネットワーク取得は goroutine で行い、`Window.Update` で反映。検索語が変わったら古い結果を捨てる
+- [ ] `ui.NewTester` で操作テスト
+
+### 5. CI (`.github/workflows/ci.yml`)
+- [ ] push と PR で `gofmt -l`、`go vet`、`go test -race`
+- [ ] アクションはバージョン固定、`permissions: contents: read`
+
+### 6. リリース (`.github/workflows/release.yml`)
+- [ ] `v*` タグの push で起動、`permissions: contents: write`
+- [ ] macOS: `macos-latest` で `go tool mygo build -platform darwin/arm64`、アドホック署名、dmg
+- [ ] Windows: ビルド方法を決める (NSIS 入りのインストーラ、または exe の zip)
+- [ ] 成果物を GitHub Release に添付 (`gh release create` / `gh release upload`)
+- [ ] Private リポジトリでは Actions の無料枠に分数制限があり、macOS runner は消費が大きい点に注意
+
+### 7. 動作確認と公開
+- [ ] `v0.1.0` タグでリリースし、成果物を Mac で起動して確認
+- [ ] 未署名なので初回起動は Gatekeeper / SmartScreen の警告が出る。手順を README に書く
+- [ ] README (使い方、ビルド、リリース手順) を書く
+
+## 決定事項
+- オーナー: `naoya03708`。モジュール `github.com/naoya03708/pokedex-app`、identifier `com.github.naoya03708.pokedex` (変更しない)
+- Windows: exe の zip で配布
+- macOS: `arm64` のみ
+- 日本語名検索: 当面は対応しない (英語名のみ。後で追加を検討)

@@ -1,0 +1,14 @@
+{
+  "name": "pokedex-app",
+  "build": { "dockerfile": "Dockerfile" },
+  "remoteUser": "dev",
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "mounts": [
+    "source=pokedex-app-gopath,target=/go,type=volume",
+    "source=pokedex-app-gocache,target=/home/dev/.cache/go-build,type=volume",
+    "source=pokedex-app-gh,target=/home/dev/.config/gh,type=volume",
+    "source=pokedex-app-claude,target=/home/dev/.claude-config,type=volume"
+  ],
+  "containerEnv": { "GOFLAGS": "-buildvcs=false" }
+}
