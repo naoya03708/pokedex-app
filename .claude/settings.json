@@ -4,6 +4,8 @@
       "Bash(go test:*)",
       "Bash(go vet:*)",
       "Bash(gofmt -l:*)",
+      "Bash(go tool staticcheck:*)",
+      "Bash(go tool mygo vet:*)",
       "Bash(go mod tidy)",
       "Bash(git status)",
       "Bash(git diff:*)",
