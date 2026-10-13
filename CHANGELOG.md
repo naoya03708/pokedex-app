@@ -9,3 +9,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - PokeAPI client (`internal/pokeapi`): name list and Pokémon detail with 10 s timeout, `context` cancellation, memory and disk cache (list expires after 7 days, details never; stale list is served when offline).
+- App model (`internal/app`): case-insensitive name filtering, loading/error states with retry, and rejection and cancellation of stale detail fetches.
