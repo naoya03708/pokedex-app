@@ -15,7 +15,7 @@
 
 ## Definition of Done
 - [ ] `gofmt -l .` is empty
-- [ ] `go vet ./...` and `go tool staticcheck ./...` pass
+- [ ] `go vet ./...` passes (and `go tool staticcheck ./...` once added)
 - [ ] `go tool mygo vet .` passes
 - [ ] `go test -race -cover ./...` passes
 - [ ] Tests added or updated for the affected requirements
