@@ -14,6 +14,7 @@ import (
 type Source interface {
 	List(ctx context.Context) ([]pokeapi.Entry, error)
 	Get(ctx context.Context, name string) (*pokeapi.Pokemon, error)
+	Sprite(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error)
 }
 
 // Status is the state of one asynchronous fetch.
@@ -41,6 +42,9 @@ type Model struct {
 	Detail       *pokeapi.Pokemon
 	DetailStatus Status
 	DetailErr    error
+
+	Sprite       []byte // PNG of the selected Pokémon, once SpriteStatus is Ready
+	SpriteStatus Status
 
 	src    Source
 	post   Poster
@@ -119,11 +123,13 @@ func (m *Model) fetchDetail(name string) {
 	m.cancelDetail = cancel
 	m.detailGen++
 	m.Selected, m.Detail, m.DetailErr, m.DetailStatus = name, nil, nil, Loading
+	m.Sprite, m.SpriteStatus = nil, Idle
 
 	gen, src, post := m.detailGen, m.src, m.post
 	go func() {
-		defer cancel() // release the child context once the fetch is over
+		defer cancel() // release the child context once the fetches are over
 		p, err := src.Get(ctx, name)
+		withSprite := err == nil && p.SpriteURL != ""
 		post(func() {
 			if m.closed || gen != m.detailGen {
 				return
@@ -133,6 +139,25 @@ func (m *Model) fetchDetail(name string) {
 				return
 			}
 			m.DetailStatus, m.Detail = Ready, p
+			m.SpriteStatus = Loading
+			if !withSprite {
+				m.SpriteStatus = Failed // nothing to show: the UI draws a placeholder
+			}
+		})
+		if !withSprite {
+			return
+		}
+		// The text is already on screen; the image follows when it arrives.
+		img, imgErr := src.Sprite(ctx, p)
+		post(func() {
+			if m.closed || gen != m.detailGen {
+				return
+			}
+			if imgErr != nil {
+				m.SpriteStatus = Failed
+				return
+			}
+			m.SpriteStatus, m.Sprite = Ready, img
 		})
 	}()
 }

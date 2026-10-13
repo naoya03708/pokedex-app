@@ -14,6 +14,9 @@ import (
 	"github.com/naoya03708/pokedex-app/internal/pokeapi"
 )
 
+// pngBytes starts with the PNG signature, which is all Sprite checks.
+const pngBytes = "\x89PNG\r\n\x1a\n-body"
+
 const listJSON = `{"count":3,"results":[
  {"name":"pikachu","url":"https://pokeapi.co/api/v2/pokemon/25/"},
  {"name":"bulbasaur","url":"https://pokeapi.co/api/v2/pokemon/1/"},
@@ -397,4 +400,188 @@ func TestClient_ConcurrentUseIsRaceFree(t *testing.T) {
 		go func() { defer wg.Done(); c.Get(context.Background(), "pikachu") }()
 	}
 	wg.Wait()
+}
+
+func spriteAPI(t *testing.T) (*fakeAPI, *pokeapi.Pokemon) {
+	t.Helper()
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/img/25.png" {
+			w.Write([]byte(pngBytes))
+			return
+		}
+		http.NotFound(w, r)
+	})
+	return api, &pokeapi.Pokemon{ID: 25, Name: "pikachu", SpriteURL: api.srv.URL + "/img/25.png"}
+}
+
+func TestSprite_FR2_FetchesImageBytes(t *testing.T) {
+	api, p := spriteAPI(t)
+	c := newClient(api, t.TempDir(), nil)
+
+	b, err := c.Sprite(context.Background(), p)
+
+	if err != nil || string(b) != pngBytes {
+		t.Fatalf("got %q, %v", b, err)
+	}
+}
+
+func TestSprite_Cache_MemoryAndNextLaunch(t *testing.T) {
+	api, p := spriteAPI(t)
+	dir := t.TempDir()
+	c := newClient(api, dir, nil)
+	c.Sprite(context.Background(), p)
+	c.Sprite(context.Background(), p)
+
+	b, err := newClient(api, dir, nil).Sprite(context.Background(), p)
+
+	if err != nil || len(b) == 0 {
+		t.Fatalf("got %q, %v", b, err)
+	}
+	if n := api.hits.Load(); n != 1 {
+		t.Fatalf("requests = %d, want 1", n)
+	}
+}
+
+func TestSprite_FR2_WithoutURLIsNotFound(t *testing.T) {
+	api, _ := spriteAPI(t)
+	c := newClient(api, t.TempDir(), nil)
+
+	_, err := c.Sprite(context.Background(), &pokeapi.Pokemon{ID: 1, Name: "x"})
+
+	if !errors.Is(err, pokeapi.ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestSprite_FR3_FailureIsNotCached(t *testing.T) {
+	var fail atomic.Bool
+	fail.Store(true)
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if fail.Load() {
+			http.Error(w, "boom", http.StatusBadGateway)
+			return
+		}
+		w.Write([]byte(pngBytes))
+	})
+	c := newClient(api, t.TempDir(), nil)
+	p := &pokeapi.Pokemon{ID: 25, SpriteURL: api.srv.URL + "/img/25.png"}
+	if _, err := c.Sprite(context.Background(), p); err == nil {
+		t.Fatal("want error")
+	}
+	fail.Store(false)
+
+	b, err := c.Sprite(context.Background(), p)
+
+	if err != nil || string(b) != pngBytes {
+		t.Fatalf("got %q, %v", b, err)
+	}
+}
+
+func TestSprite_FR4_CanceledContextStopsRequest(t *testing.T) {
+	release := make(chan struct{})
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	})
+	t.Cleanup(func() { close(release) })
+	c := newClient(api, t.TempDir(), nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+
+	go func() {
+		_, err := c.Sprite(ctx, &pokeapi.Pokemon{ID: 25, SpriteURL: api.srv.URL + "/img/25.png"})
+		done <- err
+	}()
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Sprite did not return after cancel")
+	}
+}
+
+func TestSprite_RejectsNonHTTPURLs(t *testing.T) {
+	api, _ := spriteAPI(t)
+	c := newClient(api, t.TempDir(), nil)
+
+	for _, u := range []string{"file:///etc/passwd", "ftp://x/y.png", "::bad"} {
+		if _, err := c.Sprite(context.Background(), &pokeapi.Pokemon{ID: 25, SpriteURL: u}); err == nil {
+			t.Errorf("Sprite(%q) succeeded, want error", u)
+		}
+	}
+}
+
+func TestSprite_FR3_NonPNGResponseIsRejectedAndNotCached(t *testing.T) {
+	var portal atomic.Bool
+	portal.Store(true)
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if portal.Load() {
+			w.Write([]byte("<html>please log in</html>"))
+			return
+		}
+		w.Write([]byte(pngBytes))
+	})
+	c := newClient(api, t.TempDir(), nil)
+	p := &pokeapi.Pokemon{ID: 25, SpriteURL: api.srv.URL + "/img/25.png"}
+	if _, err := c.Sprite(context.Background(), p); err == nil {
+		t.Fatal("want error for a non-PNG body")
+	}
+	portal.Store(false)
+
+	b, err := c.Sprite(context.Background(), p)
+
+	if err != nil || string(b) != pngBytes {
+		t.Fatalf("got %q, %v", b, err)
+	}
+}
+
+func TestSprite_CorruptDiskCacheIsRefetched(t *testing.T) {
+	api, p := spriteAPI(t)
+	dir := t.TempDir()
+	newClient(api, dir, nil).Sprite(context.Background(), p)
+	corruptAll(t, dir)
+
+	b, err := newClient(api, dir, nil).Sprite(context.Background(), p)
+
+	if err != nil || string(b) != pngBytes {
+		t.Fatalf("got %q, %v", b, err)
+	}
+	if n := api.hits.Load(); n != 2 {
+		t.Fatalf("requests = %d, want 2", n)
+	}
+}
+
+func TestSprite_RejectsInvalidPokemonNumber(t *testing.T) {
+	api, p := spriteAPI(t)
+	c := newClient(api, t.TempDir(), nil)
+
+	for _, id := range []int{0, -5} {
+		p.ID = id
+		if _, err := c.Sprite(context.Background(), p); err == nil {
+			t.Errorf("ID %d succeeded, want error", id)
+		}
+	}
+	if n := api.hits.Load(); n != 0 {
+		t.Fatalf("requests = %d, want 0", n)
+	}
+}
+
+func TestSprite_OversizedResponseIsRejected(t *testing.T) {
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(pngBytes))
+		w.Write(make([]byte, 17<<20))
+	})
+	c := newClient(api, t.TempDir(), nil)
+
+	_, err := c.Sprite(context.Background(), &pokeapi.Pokemon{ID: 25, SpriteURL: api.srv.URL + "/big.png"})
+
+	if err == nil || !strings.Contains(err.Error(), "larger") {
+		t.Fatalf("err = %v, want size error", err)
+	}
 }

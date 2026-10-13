@@ -19,11 +19,17 @@ var entries = []pokeapi.Entry{
 type fakeSource struct {
 	list func(ctx context.Context) ([]pokeapi.Entry, error)
 	get  func(ctx context.Context, name string) (*pokeapi.Pokemon, error)
+	// sprite is optional: Pokémon without a SpriteURL never ask for one.
+	sprite func(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error)
 }
 
 func (f fakeSource) List(ctx context.Context) ([]pokeapi.Entry, error) { return f.list(ctx) }
 func (f fakeSource) Get(ctx context.Context, n string) (*pokeapi.Pokemon, error) {
 	return f.get(ctx, n)
+}
+
+func (f fakeSource) Sprite(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error) {
+	return f.sprite(ctx, p)
 }
 
 func okList(context.Context) ([]pokeapi.Entry, error) { return entries, nil }
@@ -370,5 +376,129 @@ func TestModel_FR4_CloseIsIdempotentAndBlocksNewWork(t *testing.T) {
 	m.Start()
 	m.Select("pikachu")
 
+	q.assertEmpty(t)
+}
+
+func withSprite(_ context.Context, n string) (*pokeapi.Pokemon, error) {
+	return &pokeapi.Pokemon{ID: 25, Name: n, SpriteURL: "https://img.example/" + n + ".png"}, nil
+}
+
+func TestModel_FR2_SelectLoadsSpriteAfterDetail(t *testing.T) {
+	m, q := newModel(fakeSource{list: okList, get: withSprite,
+		sprite: func(_ context.Context, p *pokeapi.Pokemon) ([]byte, error) { return []byte("png:" + p.Name), nil }})
+
+	m.Select("pikachu")
+	q.run(t)
+
+	// Then the text is shown first, while the sprite is still loading
+	if m.DetailStatus != app.Ready || m.SpriteStatus != app.Loading || m.Sprite != nil {
+		t.Fatalf("after detail: %v %v %q", m.DetailStatus, m.SpriteStatus, m.Sprite)
+	}
+	q.run(t)
+	if m.SpriteStatus != app.Ready || string(m.Sprite) != "png:pikachu" {
+		t.Fatalf("after sprite: %v %q", m.SpriteStatus, m.Sprite)
+	}
+}
+
+func TestModel_FR3_SpriteFailureKeepsDetail(t *testing.T) {
+	m, q := newModel(fakeSource{list: okList, get: withSprite,
+		sprite: func(context.Context, *pokeapi.Pokemon) ([]byte, error) { return nil, errors.New("offline") }})
+
+	m.Select("pikachu")
+	q.run(t)
+	q.run(t)
+
+	if m.DetailStatus != app.Ready || m.Detail == nil || m.Detail.Name != "pikachu" {
+		t.Fatalf("detail lost: %v %+v", m.DetailStatus, m.Detail)
+	}
+	if m.SpriteStatus != app.Failed || m.Sprite != nil {
+		t.Fatalf("sprite: %v %q", m.SpriteStatus, m.Sprite)
+	}
+}
+
+func TestModel_FR2_NewSelectionClearsPreviousSprite(t *testing.T) {
+	m, q := newModel(fakeSource{list: okList, get: withSprite,
+		sprite: func(_ context.Context, p *pokeapi.Pokemon) ([]byte, error) { return []byte(p.Name), nil }})
+	m.Select("pikachu")
+	q.run(t)
+	q.run(t)
+
+	m.Select("raichu")
+
+	if m.Sprite != nil || m.SpriteStatus != app.Idle {
+		t.Fatalf("old sprite still shown: %v %q", m.SpriteStatus, m.Sprite)
+	}
+	q.run(t)
+	q.run(t)
+	if string(m.Sprite) != "raichu" {
+		t.Fatalf("sprite = %q", m.Sprite)
+	}
+}
+
+func TestModel_FR4_StaleSpriteIsDiscardedAndCanceled(t *testing.T) {
+	// Given the sprite of pikachu is slow and ignores nothing but its context
+	started := make(chan struct{})
+	canceled := make(chan struct{})
+	m, q := newModel(fakeSource{list: okList, get: withSprite,
+		sprite: func(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error) {
+			if p.Name == "pikachu" {
+				close(started)
+				<-ctx.Done()
+				close(canceled)
+				return []byte("stale"), nil // a late result despite the cancel
+			}
+			return []byte(p.Name), nil
+		}})
+	m.Select("pikachu")
+	q.run(t) // detail of pikachu
+	<-started
+
+	// When another row is selected
+	m.Select("raichu")
+
+	// Then the sprite fetch is canceled and its late result is not shown
+	select {
+	case <-canceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("sprite fetch was not canceled")
+	}
+	for range 3 { // stale sprite post, raichu detail, raichu sprite
+		q.run(t)
+	}
+	if string(m.Sprite) != "raichu" || m.Selected != "raichu" {
+		t.Fatalf("sprite = %q for %q", m.Sprite, m.Selected)
+	}
+}
+
+func TestModel_FR4_CloseCancelsSpriteFetch(t *testing.T) {
+	ctxCh := make(chan context.Context, 1)
+	m, q := newModel(fakeSource{list: okList, get: withSprite,
+		sprite: func(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error) {
+			ctxCh <- ctx
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}})
+	m.Select("pikachu")
+	q.run(t)
+	ctx := recvCtx(t, ctxCh)
+
+	m.Close()
+
+	<-ctx.Done()
+	q.run(t)
+	if m.SpriteStatus == app.Failed || m.Sprite != nil {
+		t.Fatalf("result applied after Close: %v", m.SpriteStatus)
+	}
+}
+
+func TestModel_FR3_NoSpriteURLShowsPlaceholderState(t *testing.T) {
+	m, q := newModel(fakeSource{list: okList, get: okGet})
+
+	m.Select("pikachu")
+	q.run(t)
+
+	if m.DetailStatus != app.Ready || m.SpriteStatus != app.Failed || m.Sprite != nil {
+		t.Fatalf("got %v %v %q", m.DetailStatus, m.SpriteStatus, m.Sprite)
+	}
 	q.assertEmpty(t)
 }

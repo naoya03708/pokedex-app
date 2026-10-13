@@ -3,12 +3,14 @@
 package pokeapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -85,6 +87,7 @@ type Client struct {
 	mu      sync.Mutex
 	list    *listCache
 	details map[string]*Pokemon
+	sprites map[int][]byte
 }
 
 type listCache struct {
@@ -107,6 +110,7 @@ func New(o Options) *Client {
 		hc:      o.HTTPClient,
 		now:     o.Now,
 		details: map[string]*Pokemon{},
+		sprites: map[int][]byte{},
 	}
 	if c.base == "" {
 		c.base = defaultBaseURL
@@ -258,44 +262,69 @@ func (c *Client) fetchPokemon(ctx context.Context, name string) (*Pokemon, error
 }
 
 func (c *Client) getJSON(ctx context.Context, url string, v any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	b, err := c.fetch(ctx, url)
 	if err != nil {
 		return err
 	}
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return fmt.Errorf("pokeapi: %w", err)
-	}
-	defer resp.Body.Close()
-	switch {
-	case resp.StatusCode == http.StatusNotFound:
-		return ErrNotFound
-	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("pokeapi: GET %s: unexpected status %d", req.URL.Path, resp.StatusCode)
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBodyBytes)).Decode(v); err != nil {
-		return fmt.Errorf("pokeapi: decode %s: %w", req.URL.Path, err)
+	if err := json.Unmarshal(b, v); err != nil {
+		return fmt.Errorf("pokeapi: decode %s: %w", url, err)
 	}
 	return nil
 }
 
-// readCache loads a JSON cache file. Missing or corrupt files report false.
-func (c *Client) readCache(rel string, v any) bool {
-	if c.dir == "" {
-		return false
+// fetch GETs url and returns the body. 404 is ErrNotFound.
+func (c *Client) fetch(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
 	}
-	b, err := os.ReadFile(filepath.Join(c.dir, rel))
-	return err == nil && json.Unmarshal(b, v) == nil
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("pokeapi: %w", err)
+	}
+	defer resp.Body.Close()
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		return nil, ErrNotFound
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("pokeapi: GET %s: unexpected status %d", req.URL.Path, resp.StatusCode)
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("pokeapi: read %s: %w", req.URL.Path, err)
+	}
+	if len(b) > maxBodyBytes {
+		return nil, fmt.Errorf("pokeapi: GET %s: response larger than %d bytes", req.URL.Path, maxBodyBytes)
+	}
+	return b, nil
 }
 
-// writeCache stores v atomically. The cache is best effort: failures are
-// ignored because the data is still served from memory.
+// readCache loads a JSON cache file. Missing or corrupt files report false.
+func (c *Client) readCache(rel string, v any) bool {
+	b, ok := c.readFile(rel)
+	return ok && json.Unmarshal(b, v) == nil
+}
+
+// writeCache stores v as JSON. See writeFile.
 func (c *Client) writeCache(rel string, v any) {
-	if c.dir == "" {
-		return
+	if b, err := json.Marshal(v); err == nil {
+		c.writeFile(rel, b)
 	}
-	b, err := json.Marshal(v)
-	if err != nil {
+}
+
+// readFile loads a non-empty cache file.
+func (c *Client) readFile(rel string) ([]byte, bool) {
+	if c.dir == "" {
+		return nil, false
+	}
+	b, err := os.ReadFile(filepath.Join(c.dir, rel))
+	return b, err == nil && len(b) > 0
+}
+
+// writeFile stores b atomically. The cache is best effort: failures are
+// ignored because the data is still served from memory.
+func (c *Client) writeFile(rel string, b []byte) {
+	if c.dir == "" {
 		return
 	}
 	path := filepath.Join(c.dir, rel)
@@ -311,4 +340,48 @@ func (c *Client) writeCache(rel string, v any) {
 	if werr != nil || cerr != nil || os.Rename(tmp.Name(), path) != nil {
 		os.Remove(tmp.Name())
 	}
+}
+
+func isPNG(b []byte) bool { return bytes.HasPrefix(b, pngMagic) }
+
+var pngMagic = []byte("\x89PNG\r\n\x1a\n")
+
+// Sprite returns the sprite image (PNG bytes) of p, cached without expiry
+// under its Pokédex number. A Pokémon without a sprite URL is ErrNotFound.
+// The returned bytes are shared with the cache and must not be modified.
+func (c *Client) Sprite(ctx context.Context, p *Pokemon) ([]byte, error) {
+	if p == nil || p.SpriteURL == "" {
+		return nil, ErrNotFound
+	}
+	if p.ID <= 0 {
+		return nil, fmt.Errorf("pokeapi: invalid Pokémon number %d", p.ID)
+	}
+	if u, err := url.Parse(p.SpriteURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return nil, fmt.Errorf("pokeapi: unsupported sprite URL %q", p.SpriteURL)
+	}
+
+	c.mu.Lock()
+	b, ok := c.sprites[p.ID]
+	c.mu.Unlock()
+	if ok {
+		return b, nil
+	}
+
+	file := filepath.Join("sprites", strconv.Itoa(p.ID)+".png")
+	if b, ok = c.readFile(file); !ok || !isPNG(b) {
+		var err error
+		if b, err = c.fetch(ctx, p.SpriteURL); err != nil {
+			return nil, err
+		}
+		// Do not keep a captive-portal page or a truncated file forever.
+		if !isPNG(b) {
+			return nil, fmt.Errorf("pokeapi: sprite %s is not a PNG image", p.SpriteURL)
+		}
+		c.writeFile(file, b)
+	}
+
+	c.mu.Lock()
+	c.sprites[p.ID] = b
+	c.mu.Unlock()
+	return b, nil
 }
