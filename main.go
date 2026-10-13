@@ -1,57 +1,44 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
+	mui "github.com/egoist/mygo/ui"
+
+	"github.com/naoya03708/pokedex-app/internal/app"
+	"github.com/naoya03708/pokedex-app/internal/pokeapi"
+	"github.com/naoya03708/pokedex-app/internal/ui"
 )
 
-// app is the state the window shows. Its view builds the interface from
-// it, on the main thread, whenever the window needs a frame: after input,
-// after Window.Update, and while something animates.
-type app struct {
-	name  string
-	count int
-}
-
-func (a *app) view(c *ui.Context) {
-	t := c.Theme()
-	ui.Column(c).Fill().Center().Gap(16).Padding(24).Children(func() {
-		ui.Text(c, "Pokedex").FontSize(26).Bold()
-		ui.TextInput(c, &a.name).Placeholder("Your name").Label("Name").Width(240)
-		greeting := "Hello!"
-		if a.name != "" {
-			greeting = fmt.Sprintf("Hello, %s!", a.name)
-		}
-		ui.Text(c, greeting).TextColor(t.TextMuted)
-		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-			if ui.Button(c, "−").Width(44).Clicked() {
-				a.count--
-			}
-			ui.Textf(c, "%d", a.count).FontSize(20).Width(48).TextAlign(ui.Center)
-			if ui.PrimaryButton(c, "+").Width(44).Clicked() {
-				a.count++
-			}
-		})
-	})
-}
-
 func main() {
-	a := &app{}
+	cacheDir, err := pokeapi.DefaultCacheDir()
+	if err != nil {
+		// Without a cache directory the app still works, but fetches every time.
+		log.Printf("disk cache disabled: %v", err)
+		cacheDir = ""
+	}
+	client := pokeapi.New(pokeapi.Options{CacheDir: cacheDir})
+
 	mygo.App.WhenReady(func() {
-		mygo.NewWindow(mygo.WindowOptions{
+		var win *mygo.Window
+		// Background fetches publish their results on the UI thread.
+		m := app.New(client, func(fn func()) { win.Update(fn) })
+		win = mygo.NewWindow(mygo.WindowOptions{
 			Title:     "Pokedex",
-			Width:     480,
-			Height:    360,
-			MinWidth:  320,
-			MinHeight: 280,
+			Width:     900,
+			Height:    600,
+			MinWidth:  640,
+			MinHeight: 420,
 			// Opens where the user left it last time.
 			StateKey: "main",
 			// The window shows the interface MyGo draws, not a web page.
-			Content: ui.View(a.view),
+			Content: mui.View(ui.New(m).Build),
 		})
+		// Closing the window cancels every running fetch. OnClosed runs on the
+		// main thread, which is where the model lives.
+		win.OnClosed(m.Close)
+		m.Start()
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

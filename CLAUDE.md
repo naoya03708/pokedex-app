@@ -40,10 +40,10 @@ macOS (arm64) と Windows 向けに配布する。ビルドとリリースは Gi
 - [x] `httptest` で外部通信なしのテストを書く
 
 ### 4. UI (native)
-- [ ] 検索ボックスと結果リスト、詳細ペイン (画像、タイプ、種族値)
-- [ ] 読み込み中・エラー・0件の表示
-- [ ] ネットワーク取得は goroutine で行い、`Window.Update` で反映。検索語が変わったら古い結果を捨てる
-- [ ] `ui.NewTester` で操作テスト
+- [x] 検索ボックスと結果リスト、詳細ペイン (画像、タイプ、種族値)
+- [x] 読み込み中・エラー・0件の表示
+- [x] ネットワーク取得は goroutine で行い、`Window.Update` で反映。検索語が変わったら古い結果を捨てる
+- [x] `ui.NewTester` で操作テスト
 
 ### 5. CI (`.github/workflows/ci.yml`)
 - [x] push と PR で `gofmt -l`、`go vet`、`go tool mygo vet .`、`go test -race -cover` (カバレッジを Job Summary に出す)
