@@ -34,6 +34,20 @@ internal/
 - 取得は goroutine で行い、結果は `Window.Update` で Model に反映する。ジョブには世代番号を付け、古い世代の結果は捨てる (FR-4)。
 - MyGo 固有の注意点は `.agents/skills/mygo-maintenance/SKILL.md` を読む。要素や `*ui.Context` を状態や goroutine に持たせない。
 
+## AI ループ (Claude Code の設定)
+Claude が人の手を待たずに「書く → 検証 → 直す」を回せるように、速さの違う 3 段のループと安全柵を `.claude/` に置いている。
+
+| ループ | いつ動くか | 仕組み |
+|---|---|---|
+| 内側 | `.go` を編集するたび | `.claude/hooks/post_edit.py` (PostToolUse): `gofmt -w` と、そのパッケージの `go vet` を実行する。問題があればその場で Claude に返す |
+| 中間 | Claude がターンを終えようとしたとき | `.claude/hooks/stop_gate.py` (Stop): origin/main から Go 関連の変更があれば `scripts/check.sh` を実行する。失敗したら終了させずに修正を続けさせる (同じ変更につき最大 3 回。それでも通らなければユーザーに報告して止まる)。通った状態は `.git/claude-stop-gate/` に記録し、同じ状態では再実行しない |
+| 外側 | 1 要件 = 1 PR | skill `/feature FR-n` (`.claude/skills/feature/`): 要件の確認 → ブランチ作成 → Red → Green → Refactor → `reviewer` subagent による自己レビュー → PR → `gh pr checks --watch` で CI が green になるまで直す |
+
+- **CI の定義が正**: `scripts/check.sh` は、`.github/workflows/ci.yml` の `check` ジョブから `run:` を読み出し、同じ順で実行する (`internal/tools/cilocal`)。チェックを足すときは ci.yml だけを変えればよい。ci.yml がローカルで実行できない形 (`${{ }}` 式、別の shell など) になると、`cilocal` のテストが落ちる。
+- **安全柵**: `.claude/hooks/guard_bash.py` (PreToolUse) が次の操作を拒否する: main への commit と push、force push、タグの push、`gh pr merge`、`gh release`、`gh repo edit`、書き込みを行う `gh api`。heredoc の本文はデータとして扱い、判定の対象にしない。この柵があるので、`git push` や `gh pr create` は許可の確認なしで実行できる (`.claude/settings.json` の allow)。判定のケースは `.claude/hooks/test_guard_bash.py` に置き、CI でも実行する。
+- **レビュー**: `.claude/agents/reviewer.md` は読み取り専用。diff を、要件、MyGo のルール、並行性、層構造、DoD の順に確認する。
+- hook は python3 で書いている (標準ライブラリだけを使う)。
+
 ## ブランチと PR
 - `main` は常にリリースできる状態に保つ。main へ直接 push しない。
 - 作業ブランチの名前: `feat/…`、`fix/…`、`docs/…`、`ci/…`、`chore/…`、`test/…`、`refactor/…`

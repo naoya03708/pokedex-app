@@ -15,7 +15,9 @@ macOS (arm64) と Windows 向けに配布する。ビルドとリリースは Gi
 - 要件: `docs/requirements.md` (FR-n と受入条件)。プロセス: `docs/development.md`。作業前に読む。
 - 受入条件駆動 + TDD: 要件 → 失敗するテスト (テスト名に FR ID) → 実装 → リファクタ。
 - 機能ごとにブランチ + PR (Conventional Commits、英語)。Claude は PR 作成と CI 確認まで。マージ・タグ push・リポジトリ設定はユーザー。main に直接 push しない。
-- PR 前に Definition of Done (`docs/development.md`) を満たす。
+- PR 前に Definition of Done (`docs/development.md`) を満たす。`scripts/check.sh` は ci.yml の check ジョブをそのまま実行する。
+- 機能の実装は skill `/feature FR-n` の手順で進める。PR を出す前に `reviewer` subagent で自己レビューする。
+- hook が、編集ごとの fmt/vet、終了前の check.sh、危険な git/gh 操作の拒否を行う (詳細は `docs/development.md` の「AI ループ」)。hook に止められたら回避せず、示された理由に従う。
 
 ## やること (上から順に。各項目は PR 単位で進める)
 

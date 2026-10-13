@@ -3,3 +3,4 @@
 /.mygo/
 mygo_windows_*.syso
 /coverage.out
+__pycache__/
