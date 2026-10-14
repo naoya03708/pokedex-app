@@ -54,7 +54,7 @@ PokeAPI (https://pokeapi.co) を引くデスクトップ図鑑アプリ。ポー
 - 日本語名の表示と検索 (`/pokemon-species/{id}` の `names`)
 - お気に入り
 - タイプでの絞り込み、進化の表示
-- Windows 対応 (exe の zip を想定。MyGo は cgo 不要なので Linux runner でクロスビルドできる見込み。実機での確認が必要)
+- Windows 対応 (exe の zip を想定。MyGo は cgo 不要なので Linux runner でクロスビルドできる見込み。実機での確認が必要) (Issue #3)
 - macOS の universal バイナリ
 - コード署名と公証 (notarization)
 
