@@ -59,8 +59,8 @@ PokeAPI (https://pokeapi.co) を引くデスクトップ図鑑アプリ。ポー
 - コード署名と公証 (notarization)
 
 ## 決定事項
+- LICENSE は MIT (著作権者 `Naoya.Omi`)。アプリには、依存ライブラリのライセンス表示を `resources/THIRD_PARTY_NOTICES.txt` として同梱する (BSD / Apache の表示義務のため)。依存から生成し、CI のテストで古さを検出する。
 - スプライトは `pokeapi.Client` が PNG のバイト列で取得し、`os.UserCacheDir()/pokedex/sprites/<図鑑番号>.png` とメモリにキャッシュする (無期限)。UI が `ui.DecodeBitmap` で描画用に変換する。取得先は API の `sprites.front_default` の URL (PokeAPI のスプライトリポジトリ)。
 
 ## 未決事項
-- LICENSE: Public にするときに決める (MIT を想定)
 - ウィンドウの見た目の細部 (レイアウト比率、配色)

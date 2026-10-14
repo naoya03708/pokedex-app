@@ -109,7 +109,7 @@ CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確�
 
 ## Public にする前のチェックリスト
 - [ ] 履歴全体にシークレットや個人情報がないことを確認する (`git log --all --format='%ae %ce' | sort -u` の結果が noreply だけ、など)
-- [ ] LICENSE を追加する
+- [x] LICENSE を追加する (MIT。依存のライセンス表示は `resources/THIRD_PARTY_NOTICES.txt`。依存を増減したら `go run ./internal/tools/notices` で更新する)
 - [ ] README にスクリーンショットとインストール手順 (Gatekeeper の回避方法を含む) を載せる
 - [ ] リポジトリの description と topics を設定する
 - [ ] main のブランチ保護を設定する
