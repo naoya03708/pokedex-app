@@ -115,7 +115,29 @@ func generate(root string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return render(append([]section{{Title: "Pokedex", Text: string(own)}}, deps...)), nil
+	goLicense, err := goRuntimeLicense(root)
+	if err != nil {
+		return "", err
+	}
+	sections := append([]section{{Title: "Pokedex", Text: string(own)}}, deps...)
+	return render(append(sections, goLicense)), nil
+}
+
+// goRuntimeLicense is the license of the Go runtime and standard library,
+// which are linked into every binary. The title has no version, so patch
+// releases of the toolchain do not change the file.
+func goRuntimeLicense(root string) (section, error) {
+	cmd := exec.Command("go", "env", "GOROOT")
+	cmd.Dir = root
+	out, err := cmd.Output()
+	if err != nil {
+		return section{}, fmt.Errorf("go env GOROOT: %w", err)
+	}
+	text, err := os.ReadFile(filepath.Join(strings.TrimSpace(string(out)), "LICENSE"))
+	if err != nil {
+		return section{}, fmt.Errorf("Go license: %w", err)
+	}
+	return section{Title: "Go standard library and runtime", Text: string(text)}, nil
 }
 
 func main() {

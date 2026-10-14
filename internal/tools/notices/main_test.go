@@ -83,6 +83,10 @@ func TestGenerate_IncludesOwnLicenseAndTheDependenciesOfTheApp(t *testing.T) {
 			t.Errorf("no section for %s", want)
 		}
 	}
+	// The Go runtime and standard library are linked into the binary.
+	if !strings.Contains(got, "Go standard library and runtime") || !strings.Contains(got, "The Go Authors") {
+		t.Error("the Go license is missing")
+	}
 	// Build-time tools are not part of the app.
 	if strings.Contains(got, "go.yaml.in/yaml") {
 		t.Error("lists a module that is not compiled into the app")
