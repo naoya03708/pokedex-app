@@ -85,6 +85,10 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app"
           exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
           test "$(lipo -archs "$app/Contents/MacOS/$exe")" = "arm64"
+          # The licenses of the bundled dependencies must travel with the app.
+          notices="$app/Contents/Resources/THIRD_PARTY_NOTICES.txt"
+          test -s "$notices"
+          grep -q "MIT License" "$notices"
           version=$(jq -r .version mygo.json)
           dmg="$dir/Pokedex-$version-macos-arm64.dmg"
           mv -- "$(ls "$dir"/*.dmg)" "$dmg"

@@ -71,4 +71,6 @@ scripts/check.sh      # CI の check ジョブと同じ内容をローカルで�
 | `internal/ui` | `app.Model` から画面を作る MyGo の view |
 
 ## ライセンス
-未定です (Public にするときに決めます)。
+[MIT License](LICENSE) です。
+
+アプリには、依存ライブラリ (MyGo など) のライセンス表示を `THIRD_PARTY_NOTICES.txt` として同梱しています (`Pokedex.app/Contents/Resources/` の中)。このファイルは `go run ./internal/tools/notices` で生成し、依存が変わると CI のテストが古さを検出します。
