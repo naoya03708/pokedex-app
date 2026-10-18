@@ -13,7 +13,7 @@ import (
 
 const (
 	maxBaseStat = 255 // the highest base stat, so a bar is value/maxBaseStat
-	spriteSize  = 120
+	spriteSize  = 128
 )
 
 // View draws the search box, the result list and the detail pane. Its fields
@@ -21,7 +21,7 @@ const (
 type View struct {
 	m *app.Model
 
-	split  float32 // width of the result list pane
+	split  float32 // width of the result list pane (DIPs)
 	list   mui.ListState
 	cursor int // highlighted row of the list, -1 for none
 
@@ -36,7 +36,7 @@ type View struct {
 }
 
 // New returns a View of m.
-func New(m *app.Model) *View { return &View{m: m, split: 300, cursor: -1} }
+func New(m *app.Model) *View { return &View{m: m, split: 260, cursor: -1} }
 
 // Build is the window's view function. It runs on the UI thread.
 func (v *View) Build(c *mui.Context) {
@@ -124,30 +124,54 @@ func (v *View) detail(c *mui.Context) {
 	}
 }
 
+// card is the detail of one Pokémon: a header band in the color of its first
+// type, then the base stats in two columns.
 func (v *View) card(c *mui.Context, p *pokeapi.Pokemon) {
-	muted := c.Theme().TextMuted
-	mui.Column(c).Padding(16).Gap(14).Children(func() {
-		mui.Row(c).Gap(16).AlignItems(mui.Center).Children(func() {
-			v.sprite(c)
-			mui.Column(c).Gap(6).Children(func() {
-				mui.Text(c, display(p.Name)).FontSize(24).Bold()
-				mui.Textf(c, "#%03d", p.ID).TextColor(muted)
-				mui.Row(c).Gap(6).Children(func() {
-					for _, t := range p.Types {
-						mui.Badge(c, t)
+	th := c.Theme()
+	band := neutral
+	if len(p.Types) > 0 {
+		band = styleOf(p.Types[0])
+	}
+	total := 0
+	for _, s := range p.Stats {
+		total += s.Base
+	}
+
+	mui.Scroll(c).Grow(1).Children(func() {
+		mui.Column(c).Children(func() {
+			// The band color is translucent, so it sits on the theme's own
+			// background in both the light and the dark appearance.
+			mui.Row(c).AlignItems(mui.Center).Gap(24).Padding(24, 28).
+				Background(band.Bg.Alpha(0.18)).Children(func() {
+				v.sprite(c)
+				mui.Column(c).Gap(6).Children(func() {
+					mui.Textf(c, "#%03d", p.ID).FontSize(12).Bold().TextColor(th.TextMuted)
+					mui.Text(c, display(p.Name)).FontSize(32).Bold()
+					mui.Row(c).Gap(6).Children(func() {
+						for _, t := range p.Types {
+							s := styleOf(t)
+							mui.Badge(c, t).Background(s.Bg).TextColor(s.Fg)
+						}
+					})
+				})
+			})
+			mui.Column(c).Padding(24, 28).Gap(16).Children(func() {
+				mui.Row(c).AlignItems(mui.Center).Children(func() {
+					mui.Text(c, "Base stats").Bold().Grow(1)
+					mui.Textf(c, "Total %d", total).TextColor(th.TextMuted)
+				})
+				mui.Grid(c).Columns(2).GapX(32).GapY(18).Children(func() {
+					for _, s := range p.Stats {
+						mui.Column(c).Gap(6).Children(func() {
+							mui.Row(c).AlignItems(mui.Center).Children(func() {
+								mui.Text(c, statLabel(s.Name)).TextColor(th.TextMuted).Grow(1)
+								mui.Textf(c, "%d", s.Base).FontSize(22).Bold()
+							})
+							mui.Progress(c, float64(s.Base)/maxBaseStat)
+						})
 					}
 				})
 			})
-		})
-		mui.Text(c, "Base stats").Bold()
-		mui.Column(c).Gap(6).Children(func() {
-			for _, s := range p.Stats {
-				mui.Row(c).Gap(10).AlignItems(mui.Center).Children(func() {
-					mui.Text(c, statLabel(s.Name)).Width(64)
-					mui.Textf(c, "%d", s.Base).Width(36).TextAlign(mui.End)
-					mui.Progress(c, float64(s.Base)/maxBaseStat).Grow(1)
-				})
-			}
 		})
 	})
 }
@@ -159,7 +183,8 @@ func (v *View) sprite(c *mui.Context) {
 		mui.Image(c, bm).Size(spriteSize, spriteSize).Fit(mui.Contain)
 		return
 	}
-	mui.Column(c).Size(spriteSize, spriteSize).Center().Children(func() {
+	mui.Column(c).Size(spriteSize, spriteSize).Center().Radius(16).
+		Background(c.Theme().Background.Alpha(0.6)).Children(func() {
 		if v.m.SpriteStatus == app.Failed || v.bitmapOf != "" {
 			mui.Text(c, "No image").TextColor(c.Theme().TextMuted)
 		} else {
