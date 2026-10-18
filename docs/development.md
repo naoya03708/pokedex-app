@@ -92,6 +92,20 @@ CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確�
   4. ユーザーが下書きの内容 (ノート、dmg、`SHA256SUMS.txt`) を確認し、**公開する**
   5. 成果物を Mac で起動して確認する
 
+### 成果物を Mac で試す
+CI が作った成果物は、ブラウザを通さずに取得する。Chrome は署名のない dmg をブロックすることがあり、`gh` で保存したファイルには macOS の隔離属性も付かない。
+
+```sh
+scripts/fetch-build.sh                   # 最新の成功したドライラン
+scripts/fetch-build.sh --branch feat/x   # ブランチを指定
+scripts/fetch-build.sh --run 39088009828 # run を指定
+```
+
+- 取得先はプロジェクトの `out-artifacts/run-<ID>/` (Git 管理外)。プロジェクトのフォルダは Mac と共有されているので、Finder からそのまま dmg を開ける。
+- チェックサムを検証し、ビルドしたブランチとコミットを `BUILD_INFO.txt` に残す。**何のビルドかは、時刻ではなくこのコミットで確かめる。**
+- 成果物は 1 日で期限が切れる。切れていたら、Actions → Release → Run workflow でドライランをやり直す (ブランチを選べる)。
+- 公開済みのリリースは `gh release download vX.Y.Z --pattern '*.dmg' --pattern SHA256SUMS.txt` で取得する (リリースの操作はユーザーが行う)。
+
 ### `release.yml` (CD)
 タグ `v*` の push で起動する。公開は人が行うので、これは継続的デリバリー (Continuous Delivery) で、自動公開ではない。
 

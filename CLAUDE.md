@@ -6,7 +6,7 @@ macOS (arm64) 向けに配布する。ビルドとリリースは GitHub Actions
 ## 開発環境のルール
 - 開発は devcontainer 上 (`scripts/dev.sh`)。非 root ユーザー `dev`。Go 1.27、gh、Claude Code が入っている。
 - **ビルド成果物の配布用ビルドはローカルでやらない**。ビルドは GitHub Actions に任せる。ローカルで行うのは編集、`go vet`、`go test` まで。
-- GUI はコンテナ内で表示できない。UI の確認は `ui.NewTester` によるテストと、CI が作った成果物を Mac で起動して行う。
+- GUI はコンテナ内で表示できない。UI の確認は `ui.NewTester` によるテストと、CI が作った成果物を Mac で起動して行う。成果物は `scripts/fetch-build.sh` で `out-artifacts/` に取得する (ブラウザは使わない。手順は `docs/development.md`)。
 - リポジトリは **Private**。Public 化の前のチェックリストは `docs/development.md`。シークレットや個人情報をコミットしない。
 - 変えてはいけないもの: `mygo.json` の `identifier` (`com.github.naoya03708.pokedex`)。Go モジュール名 `github.com/naoya03708/pokedex-app`。
 - MyGo の native UI の注意点は `.agents/skills/mygo-maintenance/SKILL.md` を読む。特に、要素を状態に保存しない、遅い I/O は UI スレッドの外で行い `Window.Update` で結果を反映する、の2点。
