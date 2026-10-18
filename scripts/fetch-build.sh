@@ -48,23 +48,28 @@ if [ -z "$run" ]; then
   fi
 fi
 
-# Is the artifact still there? (It expires after one day.)
-repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
-state=$(gh api "repos/$repo/actions/runs/$run/artifacts" \
-  --jq "[.artifacts[] | select(.name == \"$ARTIFACT\")] | if length == 0 then \"missing\" else (.[0].expired | tostring) end")
-if [ "$state" != false ]; then
-  if [ "$state" = true ]; then why="it has expired (they last one day)"; else why="the run is not a dry run, or it never made one"; fi
-  echo "run $run has no downloadable $ARTIFACT artifact: $why." >&2
-  echo "Start a new dry run: Actions > Release > Run workflow." >&2
-  exit 1
-fi
-
 dir="$OUT/run-$run"
 if [ -d "$dir" ]; then
+  # Already fetched: verify it. (This also works after the artifact expired.)
   echo "$dir already exists; verifying it instead of downloading again."
 else
-  mkdir -p "$dir"
-  gh run download "$run" --name "$ARTIFACT" --dir "$dir"
+  # Is the artifact still there? (It expires after one day.)
+  repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+  state=$(gh api "repos/$repo/actions/runs/$run/artifacts" \
+    --jq "[.artifacts[] | select(.name == \"$ARTIFACT\")] | if length == 0 then \"missing\" else (.[0].expired | tostring) end")
+  if [ "$state" != false ]; then
+    if [ "$state" = true ]; then why="it has expired (they last one day)"; else why="the run is not a dry run, or it never made one"; fi
+    echo "run $run has no downloadable $ARTIFACT artifact: $why." >&2
+    echo "Start a new dry run: Actions > Release > Run workflow." >&2
+    exit 1
+  fi
+  # Download beside the final place and move it in only when it is complete,
+  # so an interrupted download never leaves a half-filled folder behind.
+  tmp="$dir.partial"
+  rm -rf "$tmp"
+  mkdir -p "$tmp"
+  gh run download "$run" --name "$ARTIFACT" --dir "$tmp"
+  mv "$tmp" "$dir"
 fi
 if [ ! -f "$dir/BUILD_INFO.txt" ]; then
   gh run view "$run" --json headBranch,headSha,createdAt,url \
@@ -74,6 +79,15 @@ fi
 echo "== checksum"
 (
   cd "$dir"
+  if [ ! -f SHA256SUMS.txt ]; then
+    echo "$dir has no SHA256SUMS.txt: it is incomplete. Delete it and run again." >&2
+    exit 1
+  fi
+  dmg=$(ls Pokedex-*-macos-arm64.dmg 2>/dev/null | head -n 1 || true)
+  if [ -z "$dmg" ] || ! grep -qF -- "$dmg" SHA256SUMS.txt; then
+    echo "no disk image listed in SHA256SUMS.txt: the folder is not a complete build." >&2
+    exit 1
+  fi
   if command -v sha256sum >/dev/null; then sha256sum -c SHA256SUMS.txt; else shasum -a 256 -c SHA256SUMS.txt; fi
 )
 
