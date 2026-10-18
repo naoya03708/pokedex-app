@@ -362,3 +362,43 @@ func TestUI_FR2_ArrowsContinueFromTheClickedRow(t *testing.T) {
 		t.Fatalf("selected = %q, want raichu", h.m.Selected)
 	}
 }
+
+func TestUI_FR2_ShowsTheTotalOfTheBaseStats(t *testing.T) {
+	h := newHarness(t, fakeSource{})
+	h.start()
+
+	h.click("pikachu")
+	h.run(1)
+
+	h.wantText("Total 321") // 35 + 55 + 40 + 50 + 51 + 90
+}
+
+func TestUI_FR2_ShowsBothTypesOfADualTypePokemon(t *testing.T) {
+	h := newHarness(t, fakeSource{get: func(_ context.Context, n string) (*pokeapi.Pokemon, error) {
+		p := *pikachu
+		p.Name, p.Types = n, []string{"fire", "flying"}
+		return &p, nil
+	}})
+	h.start()
+
+	h.click("pikachu")
+	h.run(1)
+
+	h.wantText("fire")
+	h.wantText("flying")
+}
+
+func TestUI_FR2_DetailRendersInDarkModeAndAtTheMinimumWindowSize(t *testing.T) {
+	h := newHarness(t, fakeSource{})
+	h.start()
+	h.click("pikachu")
+	h.run(2)
+
+	h.tt.SetDark(true)
+	h.tt.SetSize(640, 420)
+	h.tt.Frame()
+
+	for _, s := range []string{"Pikachu", "Total 321", "Speed", "90"} {
+		h.wantText(s)
+	}
+}
