@@ -402,3 +402,35 @@ func TestUI_FR2_DetailRendersInDarkModeAndAtTheMinimumWindowSize(t *testing.T) {
 		h.wantText(s)
 	}
 }
+
+func TestUI_FR2_LongNameAndTwoStatColumnsFitTheMinimumWindow(t *testing.T) {
+	// Given a long name and two types in the smallest window (see main.go)
+	const winW, winH = 640, 420
+	h := newHarness(t, fakeSource{get: func(_ context.Context, n string) (*pokeapi.Pokemon, error) {
+		p := *pikachu
+		p.Name, p.Types = "landorus-therian", []string{"ground", "flying"}
+		return &p, nil
+	}})
+	h.start()
+	h.click("pikachu")
+	h.run(2)
+
+	// When the window has its minimum size
+	h.tt.SetSize(winW, winH)
+	h.tt.Frame()
+
+	// Then the name stays inside the window, and the stats form two even columns
+	name, ok := h.tt.Find("Landorus Therian")
+	if !ok || name.X+name.W > winW {
+		t.Errorf("name box %+v does not fit the %d wide window", name, winW)
+	}
+	hp, _ := h.tt.Find("HP")
+	attack, _ := h.tt.Find("Attack")
+	speed, _ := h.tt.Find("Speed")
+	if attack.X <= hp.X || speed.X != attack.X {
+		t.Errorf("stats are not in two columns: HP x=%.0f, Attack x=%.0f, Speed x=%.0f", hp.X, attack.X, speed.X)
+	}
+	if speed.Y+speed.H > winH {
+		t.Errorf("last stat row ends at %.0f, below the %d high window", speed.Y+speed.H, winH)
+	}
+}
