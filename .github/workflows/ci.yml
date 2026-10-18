@@ -47,6 +47,9 @@ jobs:
       - name: Claude hook tests
         run: python3 -m unittest discover -s .claude/hooks
 
+      - name: Script tests
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
       - name: Coverage summary
         if: always() && hashFiles('coverage.out') != ''
         run: |
