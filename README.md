@@ -17,6 +17,13 @@ UI は英語です。日本語名での検索は、今のところ対応して�
 対応は **macOS (Apple silicon / arm64)** のみです。Windows と Intel Mac は、今のところ対応していません。
 
 1. [Releases](https://github.com/naoya03708/pokedex-app/releases) から `Pokedex-X.Y.Z-macos-arm64.dmg` をダウンロードします。
+
+   Chrome などのブラウザは、署名のない dmg を「安全でないファイル」としてブロックすることがあります。その場合は、ダウンロードの一覧から「保存」(Keep) を選ぶか、[GitHub CLI](https://cli.github.com/) で取得します。CLI で保存したファイルには macOS の隔離属性が付かないので、下の初回起動の警告も出にくくなります。
+
+   ```sh
+   gh release download vX.Y.Z --repo naoya03708/pokedex-app --pattern '*.dmg' --pattern 'SHA256SUMS.txt'
+   ```
+
 2. (任意) 同じ場所の `SHA256SUMS.txt` で、ファイルが壊れていないか確かめます。
 
    ```sh
