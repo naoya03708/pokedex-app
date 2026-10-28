@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Result list: Pokédex numbers of forms with five digits (`#10034`, `#10196`) no longer wrap onto two lines, and the number of the selected row is drawn in the same color as its name instead of a gray that was nearly invisible on the selection color.
+
 ## [0.2.0] - 2026-10-18
 
 New look for the detail pane, and the license.
