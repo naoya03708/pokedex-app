@@ -135,7 +135,7 @@ func goRuntimeLicense(root string) (section, error) {
 	}
 	text, err := os.ReadFile(filepath.Join(strings.TrimSpace(string(out)), "LICENSE"))
 	if err != nil {
-		return section{}, fmt.Errorf("Go license: %w", err)
+		return section{}, fmt.Errorf("reading the Go license: %w", err)
 	}
 	return section{Title: "Go standard library and runtime", Text: string(text)}, nil
 }
