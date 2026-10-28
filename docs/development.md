@@ -74,7 +74,7 @@ PR は、次をすべて満たしてからレビューに出す。
 
 - [ ] `gofmt -l .` の出力が空
 - [ ] `go vet ./...`
-- [ ] `go tool staticcheck ./...` (staticcheck は go.mod の `tool` でバージョンを固定する)。※ Go 1.27 に対応した v0.8.2 は公開から 2 週間待つため、2026-10-26 以降に追加する (Issue #2)。それまではこの項目を省く
+- [ ] `go tool staticcheck ./...` (staticcheck は go.mod の `tool` でバージョンを固定する。v0.8.2 から Go 1.27 に対応)
 - [ ] `go tool mygo vet .`
 - [ ] `go test -race -cover ./...`
 - [ ] 関係する要件のテストを追加・更新した

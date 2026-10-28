@@ -38,6 +38,9 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      - name: staticcheck
+        run: go tool staticcheck ./...
+
       - name: mygo vet
         run: go tool mygo vet .
 
