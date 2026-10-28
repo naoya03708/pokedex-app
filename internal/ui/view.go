@@ -14,6 +14,10 @@ import (
 const (
 	maxBaseStat = 255 // the highest base stat, so a bar is value/maxBaseStat
 	spriteSize  = 128
+
+	// numberColumnWidth is the width of the Pokédex number in a result row. It
+	// holds "#10196", the longest number (a form), on one line.
+	numberColumnWidth = 60
 )
 
 // View draws the search box, the result list and the detail pane. Its fields
@@ -80,7 +84,7 @@ func (v *View) results(c *mui.Context) {
 
 func (v *View) rows(c *mui.Context) {
 	vis := v.m.Visible()
-	muted := c.Theme().TextMuted
+	th := c.Theme()
 	v.list.Key = func(i int) any { return vis[i].ID }
 	v.list.Label = func(i int) string { return vis[i].Name }
 	v.list.Selected = &v.cursor
@@ -93,7 +97,8 @@ func (v *View) rows(c *mui.Context) {
 	list := mui.List(c, &v.list, len(vis)).Grow(1).Rows(func(r mui.ListRow) {
 		e := vis[r.Index]
 		row := mui.Row(r.Context).Gap(8).Padding(6, 10).Children(func() {
-			mui.Textf(r.Context, "#%03d", e.ID).TextColor(muted).Width(44)
+			mui.Textf(r.Context, "#%03d", e.ID).TextColor(rowNumberColor(th, r.Selected())).
+				Width(numberColumnWidth).NoWrap()
 			mui.Text(r.Context, e.Name)
 		})
 		if row.Clicked() {
@@ -249,4 +254,13 @@ func statLabel(name string) string {
 		return "Sp. Def"
 	}
 	return display(name)
+}
+
+// rowNumberColor is the color of the Pokédex number in a result row: muted,
+// except in the selected row, where it must stay readable on the accent.
+func rowNumberColor(th *mui.Theme, selected bool) mui.Color {
+	if selected {
+		return th.AccentText
+	}
+	return th.TextMuted
 }
