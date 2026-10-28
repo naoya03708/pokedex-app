@@ -8,8 +8,8 @@ import (
 
 func TestRowNumberColor_FR1_SelectedRowNumberMatchesTheNameColorInBothAppearances(t *testing.T) {
 	// The list draws the name of the selected row in the theme's AccentText,
-	// so the number must use it too, not the muted gray (3-4:1 on the accent
-	// in the screenshots, where it was nearly invisible).
+	// so the number must use it too, not the muted gray, which was nearly
+	// invisible on the selection color in the screenshots.
 	for name, th := range map[string]*mui.Theme{"light": mui.LightTheme(), "dark": mui.DarkTheme()} {
 		if got := rowNumberColor(th, true); got != th.AccentText {
 			t.Errorf("%s: got %+v, want the accent text color %+v", name, got, th.AccentText)

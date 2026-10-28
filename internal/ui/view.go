@@ -17,7 +17,7 @@ const (
 
 	// numberColumnWidth is the width of the Pokédex number in a result row. It
 	// holds "#10196", the longest number (a form), on one line.
-	numberColumnWidth = 60
+	numberColumnWidth = 56
 )
 
 // View draws the search box, the result list and the detail pane. Its fields
