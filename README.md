@@ -2,20 +2,10 @@
 
 [PokeAPI](https://pokeapi.co) を引く、macOS 向けのデスクトップ図鑑アプリです。名前で絞り込み、タイプ・種族値・スプライトを表示します。UI は Go 製の [MyGo](https://github.com/egoist/mygo) の native UI で、Web ビューは使っていません。
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/main-dark.png">
-    <img src="docs/images/main-light.png" alt="Pokedex の画面。検索ボックスに char と入力して絞り込み、charizard を選んだところ。左に絞り込んだ一覧、右にスプライト、番号、タイプ、種族値 6 項目と合計が表示されている。" width="800">
-  </picture>
-</p>
-
 このリポジトリは、**要件 → テスト → 実装 → CI → 配布**という一連の流れを示すポートフォリオでもあります。開発の進め方は [docs/development.md](docs/development.md)、要件は [docs/requirements.md](docs/requirements.md) にあります。
 
 ## 機能
 - **名前で検索**: 入力するたびにその場で絞り込みます (大文字小文字は区別しません)。検索ボタンはありません。名前の途中に含まれる文字でも一致するので、`pikachu` と入力すると、`pikachu-rock-star` などのフォルム違いも並びます。
-
-  <img src="docs/images/search-light.png" alt="検索ボックスに pikachu と入力した画面。pikachu とそのフォルム違いが一覧に並び、先頭の pikachu を選んでいる。詳細は黄色い帯で、タイプは electric。" width="640">
-
 - **詳細表示**: スプライト、名前、図鑑番号 (`#025`)、タイプ、種族値 6 項目を数値とバーで表示します。
 - **キーボード操作**: `Tab` でリストに移り、`↑` `↓` で行を移動し、`Enter` で選びます。
 - **状態の表示**: 読み込み中、エラー (Retry ボタン付き)、0 件 (`No Pokémon found`)。
