@@ -67,7 +67,7 @@ GitHub の無料プランでは、Private リポジトリにブランチ保護�
 - 英語の [Conventional Commits](https://www.conventionalcommits.org/) で書く: `feat(pokeapi): add disk cache for name list`
 - 主な type: `feat`、`fix`、`docs`、`test`、`refactor`、`ci`、`chore`
 - squash merge するので、**PR のタイトルがそのまま main のコミットメッセージになる**。PR タイトルも同じ形式にする。
-- コミットの作者には GitHub の noreply アドレスを使う。リポジトリの `.git/config` に加えて、dev container では環境変数 `GIT_CONFIG_*` (`.devcontainer/devcontainer.json` と `scripts/dev.sh`) で `user.email` と `safe.directory` を指定する。VS Code がホストの `~/.gitconfig` (個人のアドレスを含みうる) をコンテナに複製しても、環境変数の設定が優先される。2 か所の設定が食い違わないことは `scripts/test_devcontainer.py` が確かめる。コンテナを作り直す (Rebuild Container) と反映される。
+- コミットの作者には GitHub の noreply アドレスを使う。リポジトリの `.git/config` に加えて、dev container では環境変数 `GIT_CONFIG_*` (`.devcontainer/devcontainer.json` と `scripts/dev.sh`) で `user.email` と `safe.directory` を指定する。VS Code がホストの `~/.gitconfig` (個人のアドレスを含みうる) をコンテナに複製しても、環境変数の設定が優先される。2 か所の設定が食い違わないことは `scripts/test_devcontainer.py` が確かめる。コンテナを作り直す (Rebuild Container) と反映される。なお、環境変数の `user.email` は、このコンテナ内のほかのリポジトリの `user.email` も上書きする。別のアドレスでコミットしたいときは、`GIT_AUTHOR_EMAIL` と `GIT_COMMITTER_EMAIL` を指定する。
 
 ## Definition of Done
 PR は、次をすべて満たしてからレビューに出す。
