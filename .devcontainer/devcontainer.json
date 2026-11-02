@@ -10,5 +10,12 @@
     "source=pokedex-app-gh,target=/home/dev/.config/gh,type=volume",
     "source=pokedex-app-claude,target=/home/dev/.claude-config,type=volume"
   ],
-  "containerEnv": { "GOFLAGS": "-buildvcs=false" }
+  "containerEnv": {
+    "GOFLAGS": "-buildvcs=false",
+    "GIT_CONFIG_COUNT": "2",
+    "GIT_CONFIG_KEY_0": "safe.directory",
+    "GIT_CONFIG_VALUE_0": "/workspace",
+    "GIT_CONFIG_KEY_1": "user.email",
+    "GIT_CONFIG_VALUE_1": "172844198+naoya03708@users.noreply.github.com"
+  }
 }
