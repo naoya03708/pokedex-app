@@ -61,7 +61,7 @@ Claude が人の手を待たずに「書く → 検証 → 直す」を回せる
 | レビュー、マージ、タグの push、リポジトリ設定の変更 | ユーザー |
 
 ### main の保護
-GitHub の無料プランでは、Private リポジトリにブランチ保護を設定できない。Private の間は上の運用ルールで守る。Public にしたら、「PR 必須」と「CI 必須」のブランチ保護 (ruleset) を設定する。
+GitHub の無料プランでは、Private リポジトリにブランチ保護を設定できない。Private の間は上の運用ルールで守った。Public にしたので、main には「PR 必須」と「CI 必須」の ruleset を設定している (下のチェックリスト)。
 
 ## コミットメッセージ
 - 英語の [Conventional Commits](https://www.conventionalcommits.org/) で書く: `feat(pokeapi): add disk cache for name list`
@@ -122,9 +122,10 @@ scripts/fetch-build.sh --run 39088009828 # run を指定
 - アクションはコミット SHA で固定している。更新は ci.yml と同じ SHA にそろえる。
 
 ## Public にする前のチェックリスト
-- [ ] 履歴全体にシークレットや個人情報がないことを確認する (`git log --all --format='%ae %ce' | sort -u` の結果が noreply だけ、など)
+- [x] 履歴全体にシークレットや個人情報がないことを確認する (`git log --all --format='%ae %ce' | sort -u` の結果が noreply だけ、など)
 - [x] LICENSE を追加する (MIT。依存のライセンス表示は `resources/THIRD_PARTY_NOTICES.txt`。依存を増減したら `go run ./internal/tools/notices` で更新する)
 - [x] README にインストール手順 (Gatekeeper の回避方法を含む) を載せる
 - [x] ポケモンのスプライトなど、権利者のいる画像をリポジトリに置かない (README のスクリーンショットも載せない。アプリは実行時に取得するだけ)
-- [ ] リポジトリの description と topics を設定する
-- [ ] main のブランチ保護を設定する
+- [x] リポジトリの description と topics を設定する
+- [x] main のブランチ保護 (ruleset) を設定する。PR 必須、必須チェック `check` (最新に保つ)、force push と削除の禁止、直線的な履歴、Bypass list は空
+- [x] Secret scanning と push protection、Dependabot alerts、Private vulnerability reporting を有効にする。外部コントリビューターの PR の Actions は、全員を承認制にする
