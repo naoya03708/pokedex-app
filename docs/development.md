@@ -135,3 +135,9 @@ scripts/fetch-build.sh --run 39088009828 # run を指定
 - Secret scanning と push protection、Dependabot alerts、Private vulnerability reporting は有効。
 - Actions のトークンの既定は read。外部コントリビューターの PR のワークフローは、全員を承認制にする。
 - 公開用の description と topics を設定している。
+
+### Dependabot
+`.github/dependabot.yml` が、Go モジュールと Actions を週次で更新する PR を出す。
+- **Actions の PR**: ci.yml と release.yml の SHA とバージョンのコメントをまとめて更新する。CI が通れば、そのままレビューしてよい。
+- **Go モジュールの PR**: `resources/THIRD_PARTY_NOTICES.txt` にバージョンが入っているので、Dependabot の PR は notices のテストで落ちる。そのPRはクローズし、Claude に同じ更新を依頼する (`go get`、`go mod tidy`、`go run ./internal/tools/notices`、`scripts/check.sh` を通した PR)。
+- Dependabot security updates (脆弱性の修正 PR) は Settings で有効にしている。
