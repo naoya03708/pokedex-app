@@ -1,0 +1,25 @@
+name: PR title
+
+# The PR is squash-merged and its title becomes the commit message on main,
+# so the title must be a Conventional Commit (docs/development.md).
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  conventional-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The title is passed through the environment, never into the script text.
+      - name: Check the title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: scripts/check-pr-title.sh
