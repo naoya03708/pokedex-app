@@ -140,4 +140,7 @@ scripts/fetch-build.sh --run 39088009828 # run を指定
 `.github/dependabot.yml` が、Go モジュールと Actions を週次で更新する PR を出す。
 - **Actions の PR**: ci.yml と release.yml の SHA とバージョンのコメントをまとめて更新する。CI が通れば、そのままレビューしてよい。
 - **Go モジュールの PR**: `resources/THIRD_PARTY_NOTICES.txt` にバージョンが入っているので、Dependabot の PR は notices のテストで落ちる。そのPRはクローズし、Claude に同じ更新を依頼する (`go get`、`go mod tidy`、`go run ./internal/tools/notices`、`scripts/check.sh` を通した PR)。
+  - 依存が新しい Go を要求する場合 (`requires go >= 1.27.x`)、`go get` は `GOTOOLCHAIN=local` のコンテナでは失敗する。devcontainer のイメージを `--pull` で再ビルドし、`go version` を確認してから進める。`go.mod` の `go` は上がり、CI は `go-version-file: go.mod` なので追従する。
+  - 先に別の Go モジュール PR をマージすると、残りの Dependabot PR は `go.mod` / `go.sum` が競合する (DIRTY)。閉じて、最新の main から同じ手順でやり直す。notices に差分が出ないこともある。
+  - GUI はコンテナで確認できない。MyGo のような UI ライブラリが大きく上がるときは、マージ前に Release のドライラン + `scripts/fetch-build.sh` で Mac で見る。
 - Dependabot security updates (脆弱性の修正 PR) は Settings で有効にしている。
