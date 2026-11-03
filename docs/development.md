@@ -88,6 +88,8 @@ CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確�
 
 静的解析 (SAST) は `codeql.yml` が行う (PR、main、毎週月曜)。結果は Security → Code scanning に出る。リポジトリの「Code scanning の default setup」は無効のままにする (有効だとこの workflow と二重になり、アップロードが失敗する)。
 
+main、タグ、定期実行 (schedule) の workflow が失敗すると、`notify-failure.yml` が `ci-failure` ラベルの Issue を作る (同じ workflow とブランチの Issue が開いていればコメントを足す)。PR の実行とドライランは対象外。原因を直すか再実行して、Issue をクローズする。
+
 workflow ファイル自体の検査は `workflow-lint.yml` が行う (`.github/` を変える PR)。actionlint は構文と式を、zizmor は権限、script injection、キャッシュ汚染、Dependabot の cooldown などを見る。actionlint のバージョンは Dependabot が追わないので、手で上げる。
 
 依存の差分の検査は `dependency-review.yml` が PR で行う。追加・更新された依存に moderate 以上の脆弱性があるか、強いコピーレフト (GPL / AGPL) のライセンスだと失敗する。Dependabot の Go PR は notices のテストで落ちるので (「Dependabot」を参照)、この検査はそのやり直しの PR で働く。
