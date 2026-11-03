@@ -11,6 +11,10 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     open-pull-requests-limit: 3
+    # Wait a week after a release before proposing it (security updates are
+    # not delayed).
+    cooldown:
+      default-days: 7
 
   # Actions are pinned by commit SHA; Dependabot updates the SHA and the
   # version comment in every workflow file together.
@@ -21,3 +25,7 @@ updates:
     commit-message:
       prefix: "ci(deps)"
     open-pull-requests-limit: 3
+    # Wait a week after a release before proposing it (security updates are
+    # not delayed).
+    cooldown:
+      default-days: 7
