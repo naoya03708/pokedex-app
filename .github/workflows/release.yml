@@ -84,6 +84,18 @@ jobs:
       - name: Verify the app and name the artifacts
         run: scripts/verify-macos-app.sh
 
+      # Bill of materials: the Go modules the app is built from, as CycloneDX.
+      # The version is pinned here and is not tracked by Dependabot.
+      - name: SBOM
+        run: |
+          set -euo pipefail
+          version=$(jq -r .version mygo.json)
+          sbom="build/darwin-arm64/Pokedex-$version-sbom.cdx.json"
+          go run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.12.0 \
+            app -json -main . -output "$sbom"
+          test -s "$sbom"
+          echo "SBOM=$sbom" >> "$GITHUB_ENV"
+
       # Signed statement that this workflow, at this commit, built these files.
       # Verify a download with: gh attestation verify <file> --repo <owner/repo>
       - name: Attest build provenance
@@ -92,6 +104,7 @@ jobs:
           subject-path: |
             ${{ env.DMG }}
             ${{ env.SUMS }}
+            ${{ env.SBOM }}
 
       # A dry run leaves the disk image to download and try on a Mac.
       - name: Keep the disk image of a dry run
@@ -102,6 +115,7 @@ jobs:
           path: |
             ${{ env.DMG }}
             ${{ env.SUMS }}
+            ${{ env.SBOM }}
           retention-days: 1
           if-no-files-found: error
 
@@ -133,4 +147,4 @@ jobs:
           fi
           # --clobber: re-running the job replaces the files of the draft.
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
-            "$DMG" "$SUMS"
+            "$DMG" "$SUMS" "$SBOM"
