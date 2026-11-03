@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # Go modules (including the tool dependencies in go.mod).
+  # A module bump also changes resources/THIRD_PARTY_NOTICES.txt, which
+  # Dependabot cannot regenerate, so the notices test fails on these PRs.
+  # See "Dependabot" in docs/development.md.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    open-pull-requests-limit: 3
+
+  # Actions are pinned by commit SHA; Dependabot updates the SHA and the
+  # version comment in every workflow file together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci(deps)"
+    open-pull-requests-limit: 3
