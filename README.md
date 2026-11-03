@@ -30,7 +30,13 @@ UI は英語です。日本語名での検索は、今のところ対応して�
    cd ~/Downloads && shasum -a 256 -c SHA256SUMS.txt
    ```
 
-3. dmg を開き、`Pokedex.app` を `Applications` にコピーします。
+3. (任意) 来歴を付け始めたあとのリリースの dmg が、このリポジトリの GitHub Actions でビルドされたものか確かめます。ビルドの来歴 (attestation) を、GitHub CLI で検証します。
+
+   ```sh
+   gh attestation verify Pokedex-X.Y.Z-macos-arm64.dmg --repo naoya03708/pokedex-app
+   ```
+
+4. dmg を開き、`Pokedex.app` を `Applications` にコピーします。
 
 ### 初回起動の警告について
 このアプリは Apple の Developer ID による署名と公証 (notarization) を受けていません (アドホック署名です)。そのため、初回起動で次の警告が出ます。

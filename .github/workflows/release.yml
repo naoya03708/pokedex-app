@@ -59,6 +59,8 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write # create the draft release and upload to it
+      id-token: write # sign the build provenance (Sigstore)
+      attestations: write # store the attestation
     env:
       TAG: ${{ github.ref_name }}
       GH_TOKEN: ${{ github.token }}
@@ -81,6 +83,15 @@ jobs:
       # macOS build of pull requests).
       - name: Verify the app and name the artifacts
         run: scripts/verify-macos-app.sh
+
+      # Signed statement that this workflow, at this commit, built these files.
+      # Verify a download with: gh attestation verify <file> --repo <owner/repo>
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            ${{ env.DMG }}
+            ${{ env.SUMS }}
 
       # A dry run leaves the disk image to download and try on a Mac.
       - name: Keep the disk image of a dry run

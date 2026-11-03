@@ -131,6 +131,7 @@ scripts/fetch-build.sh --run 39088009828 # run を指定
 - Actions タブの「Release」→ Run workflow で、任意のブランチから**ドライラン**できる。チェック、ビルド、署名の検証までは同じで、リリースは作らず、dmg と `SHA256SUMS.txt` を run の Artifacts (保持 1 日) に残す。タグを打つ前に macOS runner の経路を試し、dmg を Mac で起動して確かめるのに使う。
 - ジョブを再実行すると、下書きは残したまま、ファイルを置き換える (`--clobber`)。
 - `v1.2.3-rc1` のようにハイフンを含むタグは prerelease になる。ただし version の検査は厳密なので、`mygo.json` の version も同じにする必要がある。
+- `package-macos` は dmg と `SHA256SUMS.txt` の来歴 (attestation, `actions/attest-build-provenance`) を作る。署名のない (アドホック署名の) dmg が、この workflow のこのコミットから作られたことを `gh attestation verify <file> --repo naoya03708/pokedex-app` で確かめられる。公証の代わりにはならない (macOS の警告は消えない)。`id-token: write` と `attestations: write` はこのジョブだけに与えている。ドライランでも作る。
 - Release の検証手順は `scripts/verify-macos-app.sh` で、`macos-build.yml` と共有している。
 - アクションはコミット SHA で固定している。更新は ci.yml と同じ SHA にそろえる。
 
