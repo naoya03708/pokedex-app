@@ -32,6 +32,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false # a release must not restore a cache from another run
 
       - name: Tag matches mygo.json and CHANGELOG
         if: github.ref_type == 'tag'
@@ -70,6 +71,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false # a release must not restore a cache from another run
 
       # Ad-hoc signed app and a disk image, in build/darwin-arm64/.
       - name: Build
