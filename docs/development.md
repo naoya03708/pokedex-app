@@ -61,7 +61,7 @@ Claude が人の手を待たずに「書く → 検証 → 直す」を回せる
 | レビュー、マージ、タグの push、リポジトリ設定の変更 | ユーザー |
 
 ### main の保護
-GitHub の無料プランでは、Private リポジトリにブランチ保護を設定できない。Private の間は上の運用ルールで守る。Public にしたら、「PR 必須」と「CI 必須」のブランチ保護 (ruleset) を設定する。
+main には ruleset で「PR 必須」と「CI 必須」を設定している (「リポジトリのルールと設定」を参照)。
 
 ## コミットメッセージ
 - 英語の [Conventional Commits](https://www.conventionalcommits.org/) で書く: `feat(pokeapi): add disk cache for name list`
@@ -81,7 +81,7 @@ PR は、次をすべて満たしてからレビューに出す。
 - [ ] 必要に応じて docs と `CHANGELOG.md` の `[Unreleased]` を更新した
 - [ ] CI が green
 
-CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確かめる。カバレッジは Job Summary に出す。macOS runner は Private リポジトリでは消費が大きいので、リリースのときだけ使う。
+CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確かめる。カバレッジは Job Summary に出す。macOS runner は高価なので、リリース (とそのドライラン) のときだけ使う。
 
 ## バージョンとリリース
 - [SemVer](https://semver.org/) に従う。1.0.0 までは、破壊的な変更があれば MINOR を上げる。
@@ -118,13 +118,20 @@ scripts/fetch-build.sh --run 39088009828 # run を指定
 - Actions タブの「Release」→ Run workflow で、任意のブランチから**ドライラン**できる。チェック、ビルド、署名の検証までは同じで、リリースは作らず、dmg と `SHA256SUMS.txt` を run の Artifacts (保持 1 日) に残す。タグを打つ前に macOS runner の経路を試し、dmg を Mac で起動して確かめるのに使う。
 - ジョブを再実行すると、下書きは残したまま、ファイルを置き換える (`--clobber`)。
 - `v1.2.3-rc1` のようにハイフンを含むタグは prerelease になる。ただし version の検査は厳密なので、`mygo.json` の version も同じにする必要がある。
-- macOS runner の分数は Private リポジトリでは消費が大きい。タグのときしか使わない。
+- macOS runner は高価なので、ドライランとタグのときしか使わない。
 - アクションはコミット SHA で固定している。更新は ci.yml と同じ SHA にそろえる。
 
-## Public にする前のチェックリスト
-- [ ] 履歴全体にシークレットや個人情報がないことを確認する (`git log --all --format='%ae %ce' | sort -u` の結果が noreply だけ、など)
-- [x] LICENSE を追加する (MIT。依存のライセンス表示は `resources/THIRD_PARTY_NOTICES.txt`。依存を増減したら `go run ./internal/tools/notices` で更新する)
-- [x] README にインストール手順 (Gatekeeper の回避方法を含む) を載せる
-- [x] ポケモンのスプライトなど、権利者のいる画像をリポジトリに置かない (README のスクリーンショットも載せない。アプリは実行時に取得するだけ)
-- [ ] リポジトリの description と topics を設定する
-- [ ] main のブランチ保護を設定する
+## リポジトリのルールと設定
+リポジトリは Public。変更はユーザーが GitHub の Settings で行う (Claude には変更させない)。
+
+### ルール
+- 権利者のいる画像 (ポケモンのスプライトなど) をコミットしない。README のスクリーンショットにも使わない。アプリはスプライトを同梱せず、実行時に取得するだけにする。
+- シークレットや個人情報をコミットしない。コミットの作者は noreply アドレスにする (「コミットメッセージ」を参照)。
+- 依存を増減したら、`go run ./internal/tools/notices` で `resources/THIRD_PARTY_NOTICES.txt` を更新する (古いと CI のテストが落ちる)。
+
+### 設定 (崩れていないかの基準)
+- マージは squash のみ。マージ後にブランチを削除する。
+- main の ruleset (Bypass list は空): PR 必須、必須チェック `check` (ブランチを最新に保つ)、force push と削除の禁止、直線的な履歴。
+- Secret scanning と push protection、Dependabot alerts、Private vulnerability reporting は有効。
+- Actions のトークンの既定は read。外部コントリビューターの PR のワークフローは、全員を承認制にする。
+- 公開用の description と topics を設定している。
