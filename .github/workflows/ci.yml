@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   check:
-    # Linux only: macOS runners cost far more of the private-repo minutes.
+    # Linux checks. The macOS build of pull requests is macos-build.yml.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
