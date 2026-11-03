@@ -55,7 +55,6 @@ jobs:
 
   package-macos:
     needs: verify
-    # macOS runners use far more of the private-repo minutes: release only.
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
@@ -77,27 +76,11 @@ jobs:
       - name: Build
         run: go tool mygo build -platform darwin/arm64
 
-      # GitHub turns spaces in asset names into dots, so the disk image gets a
-      # space-free name before the checksum is written.
+      # Checks the signature, the architecture and the bundled licenses, and
+      # names the disk image (scripts/verify-macos-app.sh, shared with the
+      # macOS build of pull requests).
       - name: Verify the app and name the artifacts
-        run: |
-          set -euo pipefail
-          dir=build/darwin-arm64
-          app=$(ls -d "$dir"/*.app)
-          codesign --verify --deep --strict --verbose=2 "$app"
-          exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
-          test "$(lipo -archs "$app/Contents/MacOS/$exe")" = "arm64"
-          # The licenses of the bundled dependencies must travel with the app.
-          notices="$app/Contents/Resources/THIRD_PARTY_NOTICES.txt"
-          test -s "$notices"
-          grep -q "MIT License" "$notices"
-          version=$(jq -r .version mygo.json)
-          dmg="$dir/Pokedex-$version-macos-arm64.dmg"
-          mv -- "$(ls "$dir"/*.dmg)" "$dmg"
-          (cd "$dir" && shasum -a 256 -- "$(basename "$dmg")" > SHA256SUMS.txt)
-          cat "$dir/SHA256SUMS.txt"
-          echo "DMG=$dmg" >> "$GITHUB_ENV"
-          echo "SUMS=$dir/SHA256SUMS.txt" >> "$GITHUB_ENV"
+        run: scripts/verify-macos-app.sh
 
       # A dry run leaves the disk image to download and try on a Mac.
       - name: Keep the disk image of a dry run

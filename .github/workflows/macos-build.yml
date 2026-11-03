@@ -1,0 +1,48 @@
+name: macOS build
+
+# Builds the macOS app on every pull request, so a change that breaks the
+# packaging (or the signature, or the bundled licenses) is found before the
+# release. Same build and checks as the Release workflow; the repository is
+# public, so macOS runners cost nothing.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # Ad-hoc signed app and a disk image, in build/darwin-arm64/.
+      - name: Build
+        run: go tool mygo build -platform darwin/arm64
+
+      - name: Verify the app and name the artifacts
+        run: scripts/verify-macos-app.sh
+
+      # To try the build on a Mac. The disk image is unsigned; see the README.
+      - name: Keep the disk image
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-arm64-build
+          path: |
+            ${{ env.DMG }}
+            ${{ env.SUMS }}
+          retention-days: 1
+          if-no-files-found: error

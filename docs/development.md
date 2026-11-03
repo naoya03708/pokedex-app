@@ -82,7 +82,9 @@ PR は、次をすべて満たしてからレビューに出す。
 - [ ] 必要に応じて docs と `CHANGELOG.md` の `[Unreleased]` を更新した
 - [ ] CI が green
 
-CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確かめる。カバレッジは Job Summary に出す。macOS runner は高価なので、リリース (とそのドライラン) のときだけ使う。
+CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確かめる。カバレッジは Job Summary に出す。
+
+macOS でのビルドは `macos-build.yml` が PR と main で行う (Release と同じビルドと `scripts/verify-macos-app.sh` の検証)。リポジトリは Public なので macOS runner の利用は無料。dmg は artifact `macos-arm64-build` (保持 1 日) に残る。`scripts/fetch-build.sh` は今のところ Release のドライラン用で、この artifact は `gh run download <run> --name macos-arm64-build` で取る。
 
 脆弱性の検査 (SCA) は別 workflow の `govulncheck.yml` が行う (PR、main、毎週月曜)。呼び出している関数に既知の脆弱性があると失敗する。標準ライブラリの脆弱性も対象なので、落ちたら Go のバージョンを上げる。必須チェックにするかは Settings でユーザーが決める。
 
@@ -129,7 +131,7 @@ scripts/fetch-build.sh --run 39088009828 # run を指定
 - Actions タブの「Release」→ Run workflow で、任意のブランチから**ドライラン**できる。チェック、ビルド、署名の検証までは同じで、リリースは作らず、dmg と `SHA256SUMS.txt` を run の Artifacts (保持 1 日) に残す。タグを打つ前に macOS runner の経路を試し、dmg を Mac で起動して確かめるのに使う。
 - ジョブを再実行すると、下書きは残したまま、ファイルを置き換える (`--clobber`)。
 - `v1.2.3-rc1` のようにハイフンを含むタグは prerelease になる。ただし version の検査は厳密なので、`mygo.json` の version も同じにする必要がある。
-- macOS runner は高価なので、ドライランとタグのときしか使わない。
+- Release の検証手順は `scripts/verify-macos-app.sh` で、`macos-build.yml` と共有している。
 - アクションはコミット SHA で固定している。更新は ci.yml と同じ SHA にそろえる。
 
 ## リポジトリのルールと設定
