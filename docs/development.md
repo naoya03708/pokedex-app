@@ -84,7 +84,7 @@ PR は、次をすべて満たしてからレビューに出す。
 
 CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確かめる。カバレッジは Job Summary に出す。
 
-macOS でのビルドは `macos-build.yml` が PR と main で行う (Release と同じビルドと `scripts/verify-macos-app.sh` の検証)。リポジトリは Public なので macOS runner の利用は無料。dmg は artifact `macos-arm64-build` (保持 1 日) に残る。`scripts/fetch-build.sh` は今のところ Release のドライラン用で、この artifact は `gh run download <run> --name macos-arm64-build` で取る。
+macOS でのビルドは `macos-build.yml` が PR と main で行う (Release と同じビルドと `scripts/verify-macos-app.sh` の検証)。リポジトリは Public なので macOS runner の利用は無料。ビルドしたアプリは `scripts/smoke-app.sh` で起動し、数秒生きていることを確かめる (クラッシュの検知。ウィンドウの中身は見ない)。dmg は artifact `macos-arm64-build` (保持 1 日) に残る。`scripts/fetch-build.sh` は今のところ Release のドライラン用で、この artifact は `gh run download <run> --name macos-arm64-build` で取る。
 
 脆弱性の検査 (SCA) は別 workflow の `govulncheck.yml` が行う (PR、main、毎週月曜)。呼び出している関数に既知の脆弱性があると失敗する。標準ライブラリの脆弱性も対象なので、落ちたら Go のバージョンを上げる。必須チェックにするかは Settings でユーザーが決める。
 
