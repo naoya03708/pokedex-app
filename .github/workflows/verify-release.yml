@@ -1,0 +1,33 @@
+name: Verify release
+
+# After a release is published, downloads what users will download and checks
+# it: all assets present, checksum, and build-provenance attestations signed by
+# the Release workflow. A failure opens an issue (notify-failure.yml).
+# Run by hand (Actions > Verify release) to re-check an existing release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to verify, e.g. v0.3.0
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify the assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: scripts/verify-release.sh "$TAG"
