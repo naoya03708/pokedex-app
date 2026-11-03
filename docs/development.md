@@ -83,6 +83,8 @@ PR は、次をすべて満たしてからレビューに出す。
 
 CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確かめる。カバレッジは Job Summary に出す。macOS runner は高価なので、リリース (とそのドライラン) のときだけ使う。
 
+脆弱性の検査 (SCA) は別 workflow の `govulncheck.yml` が行う (PR、main、毎週月曜)。呼び出している関数に既知の脆弱性があると失敗する。標準ライブラリの脆弱性も対象なので、落ちたら Go のバージョンを上げる。必須チェックにするかは Settings でユーザーが決める。
+
 ## バージョンとリリース
 - [SemVer](https://semver.org/) に従う。1.0.0 までは、破壊的な変更があれば MINOR を上げる。
 - 手順:
