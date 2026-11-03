@@ -87,6 +87,8 @@ CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確�
 
 静的解析 (SAST) は `codeql.yml` が行う (PR、main、毎週月曜)。結果は Security → Code scanning に出る。リポジトリの「Code scanning の default setup」は無効のままにする (有効だとこの workflow と二重になり、アップロードが失敗する)。
 
+依存の差分の検査は `dependency-review.yml` が PR で行う。追加・更新された依存に moderate 以上の脆弱性があるか、強いコピーレフト (GPL / AGPL) のライセンスだと失敗する。Dependabot の Go PR は notices のテストで落ちるので (「Dependabot」を参照)、この検査はそのやり直しの PR で働く。
+
 ## バージョンとリリース
 - [SemVer](https://semver.org/) に従う。1.0.0 までは、破壊的な変更があれば MINOR を上げる。
 - 手順:
