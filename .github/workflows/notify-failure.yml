@@ -1,8 +1,9 @@
 name: Notify failure
 
-# Opens (or comments on) an issue when a workflow fails on main, a tag or a
-# schedule, so a red run nobody is watching is not missed. Pull request runs
-# are excluded: the author sees those. Dry runs (workflow_dispatch) too.
+# Opens (or comments on) an issue when a workflow fails on main, a tag, a
+# schedule or a published release, so a red run nobody is watching is not
+# missed. Pull request runs are excluded: the author sees those. Dry runs
+# (workflow_dispatch) too.
 on:
   workflow_run: # zizmor: ignore[dangerous-triggers] only runs a trusted script from main; no code from the triggering run is checked out or executed
     workflows:
@@ -11,6 +12,7 @@ on:
       - govulncheck
       - Workflow lint
       - Release
+      - Verify release
     types: [completed]
 
 permissions:
@@ -21,7 +23,8 @@ jobs:
     if: >-
       github.event.workflow_run.conclusion == 'failure' &&
       (github.event.workflow_run.event == 'push' ||
-       github.event.workflow_run.event == 'schedule')
+       github.event.workflow_run.event == 'schedule' ||
+       github.event.workflow_run.event == 'release')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

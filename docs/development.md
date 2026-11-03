@@ -90,7 +90,9 @@ macOS でのビルドは `macos-build.yml` が PR と main で行う (Release �
 
 静的解析 (SAST) は `codeql.yml` が行う (PR、main、毎週月曜)。結果は Security → Code scanning に出る。リポジトリの「Code scanning の default setup」は無効のままにする (有効だとこの workflow と二重になり、アップロードが失敗する)。
 
-main、タグ、定期実行 (schedule) の workflow が失敗すると、`notify-failure.yml` が `ci-failure` ラベルの Issue を作る (同じ workflow とブランチの Issue が開いていればコメントを足す)。PR の実行とドライランは対象外。原因を直すか再実行して、Issue をクローズする。
+リリースを公開すると、`verify-release.yml` が公開された資産をダウンロードして、(1) dmg・`SHA256SUMS.txt`・SBOM がそろっていること、(2) チェックサム、(3) Release workflow による来歴 (attestation) を `scripts/verify-release.sh` で確かめる。Actions → Verify release → Run workflow で、公開済みのタグを指定して再確認もできる (来歴を付け始める前のリリースは失敗する)。
+
+main、タグ、定期実行 (schedule)、リリース公開後の検証の workflow が失敗すると、`notify-failure.yml` が `ci-failure` ラベルの Issue を作る (同じ workflow とブランチの Issue が開いていればコメントを足す)。PR の実行とドライランは対象外。原因を直すか再実行して、Issue をクローズする。
 
 workflow ファイル自体の検査は `workflow-lint.yml` が行う (`.github/` を変える PR)。actionlint は構文と式を、zizmor は権限、script injection、キャッシュ汚染、Dependabot の cooldown などを見る。actionlint のバージョンは Dependabot が追わないので、手で上げる。
 
