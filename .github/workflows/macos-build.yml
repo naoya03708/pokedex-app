@@ -1,11 +1,21 @@
 name: macOS build
 
-# Builds the macOS app on every pull request, so a change that breaks the
-# packaging (or the signature, or the bundled licenses) is found before the
-# release. Same build and checks as the Release workflow; the repository is
-# public, so macOS runners cost nothing.
+# Builds the macOS app on pull requests that can change the app or its
+# packaging, so a change that breaks the build (or the signature, or the bundled
+# licenses) is found before the release. Same build and checks as the Release
+# workflow. Docs-only changes skip it: macOS runners queue for
+# minutes. Every push to main builds, whatever changed.
 on:
   pull_request:
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "mygo.json"
+      - "resources/**"
+      - ".github/workflows/macos-build.yml"
+      - "scripts/verify-macos-app.sh"
+      - "scripts/smoke-app.sh"
   push:
     branches: [main]
 
