@@ -1,0 +1,31 @@
+name: Release Please
+
+# Keeps one open "release PR" that bumps the version in mygo.json and
+# CHANGELOG.md from the Conventional Commits on main. It does not tag and does
+# not create a GitHub Release (skip-github-release): merging the release PR and
+# pushing the vX.Y.Z tag stay manual, and release.yml builds the draft Release
+# from the tag as before. See docs/development.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push the release branch
+      pull-requests: write # open and update the release PR
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
