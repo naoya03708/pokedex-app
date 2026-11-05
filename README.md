@@ -1,5 +1,7 @@
 # Pokedex
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/naoya03708/pokedex-app/badge)](https://scorecard.dev/viewer/?uri=github.com/naoya03708/pokedex-app)
+
 [PokeAPI](https://pokeapi.co) を引く、macOS 向けのデスクトップ図鑑アプリです。名前で絞り込み、タイプ・種族値・スプライトを表示します。UI は Go 製の [MyGo](https://github.com/egoist/mygo) の native UI で、Web ビューは使っていません。
 
 このリポジトリは、**要件 → テスト → 実装 → CI → 配布**という一連の流れを示すポートフォリオでもあります。開発の進め方は [docs/development.md](docs/development.md)、要件は [docs/requirements.md](docs/requirements.md) にあります。
