@@ -90,6 +90,8 @@ macOS でのビルドは `macos-build.yml` が main への push と、アプリ�
 
 静的解析 (SAST) は `codeql.yml` が行う (PR、main、毎週月曜)。結果は Security → Code scanning に出る。リポジトリの「Code scanning の default setup」は無効のままにする (有効だとこの workflow と二重になり、アップロードが失敗する)。
 
+配布の指標 (公開したリリースの数と、コミットからリリースまでの中央値) は `dora-report.yml` が毎月 1 日に Job Summary へ出す (Actions タブから手動実行もできる)。変更失敗率と復旧時間は、インシデントの記録がないので測らない。
+
 OpenSSF Scorecard は `scorecard.yml` が main への push と毎週月曜に実行する。結果は Security → Code scanning (category `scorecard`) と公開 API に出て、README のバッジが参照する。Scorecard は workflow の権限やブランチ保護なども採点するので、点が下がったら指摘された設定を直す。
 
 リリースを公開すると、`verify-release.yml` が公開された資産をダウンロードして、(1) dmg・`SHA256SUMS.txt`・SBOM がそろっていること、(2) チェックサム、(3) Release workflow による来歴 (attestation) を `scripts/verify-release.sh` で確かめる。Actions → Verify release → Run workflow で、公開済みのタグを指定して再確認もできる (来歴を付け始める前のリリースは失敗する)。
