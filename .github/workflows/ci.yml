@@ -44,8 +44,15 @@ jobs:
       - name: mygo vet
         run: go tool mygo vet .
 
+      # The JSON goes through scripts/test_report.py, which prints the failures,
+      # annotates the failing lines on the pull request and fills the job summary.
+      # go test's own exit status decides whether the step fails.
       - name: go test
-        run: go test -race -coverprofile=coverage.out ./...
+        run: |
+          status=0
+          go test -race -coverprofile=coverage.out -json ./... > test-results.json || status=$?
+          python3 scripts/test_report.py test-results.json
+          exit "$status"
 
       # Fails when a package's coverage falls below .github/coverage-baseline.txt.
       - name: Coverage ratchet

@@ -5,3 +5,4 @@ mygo_windows_*.syso
 /coverage.out
 __pycache__/
 .DS_Store
+/test-results.json
