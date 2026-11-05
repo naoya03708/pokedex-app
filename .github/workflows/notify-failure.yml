@@ -12,6 +12,7 @@ on:
       - govulncheck
       - Workflow lint
       - Scorecard
+      - DORA report
       - Release
       - Verify release
     types: [completed]
