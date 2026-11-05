@@ -82,7 +82,7 @@ PR は、次をすべて満たしてからレビューに出す。
 - [ ] 必要に応じて docs と `CHANGELOG.md` の `[Unreleased]` を更新した
 - [ ] CI が green
 
-CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確かめる。カバレッジは Job Summary に出し、パッケージごとの下限 (`.github/coverage-baseline.txt`) を `scripts/coverage_ratchet.py` で守らせる (0.5 ポイントまでの低下は許す)。カバレッジが上がったら、同じ PR で下限の数字も上げる。下げるときは理由を PR に書く。
+CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確かめる。テスト結果は `go test -json` を `scripts/test_report.py` で整形し、失敗したテストを PR の該当行への annotation と Job Summary に出す。カバレッジは Job Summary に出し、パッケージごとの下限 (`.github/coverage-baseline.txt`) を `scripts/coverage_ratchet.py` で守らせる (0.5 ポイントまでの低下は許す)。カバレッジが上がったら、同じ PR で下限の数字も上げる。下げるときは理由を PR に書く。
 
 macOS でのビルドは `macos-build.yml` が main への push と、アプリやビルドに関わるファイル (`*.go`、`go.mod`、`go.sum`、`mygo.json`、`resources/`、このビルドの workflow とスクリプト) を変えた PR で行う。docs だけの PR では走らせない (macOS runner は待ち時間が長いため。必須チェックにもしない) (Release と同じビルドと `scripts/verify-macos-app.sh` の検証)。リポジトリは Public なので macOS runner の利用は無料。ビルドしたアプリは `scripts/smoke-app.sh` で起動し、数秒生きていることを確かめる (クラッシュの検知。ウィンドウの中身は見ない)。dmg は artifact `macos-arm64-build` (保持 1 日) に残る。`scripts/fetch-build.sh` は今のところ Release のドライラン用で、この artifact は `gh run download <run> --name macos-arm64-build` で取る。
 
