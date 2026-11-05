@@ -79,7 +79,7 @@ PR は、次をすべて満たしてからレビューに出す。
 - [ ] `go tool mygo vet .`
 - [ ] `go test -race -cover ./...`
 - [ ] 関係する要件のテストを追加・更新した
-- [ ] 必要に応じて docs と `CHANGELOG.md` の `[Unreleased]` を更新した
+- [ ] 必要に応じて docs を更新した (`CHANGELOG.md` はリリース PR が生成するので、手で書かない。利用者に見える変更は PR タイトルの `feat:` / `fix:` で表す)
 - [ ] CI が green
 
 CI (`.github/workflows/ci.yml`) は ubuntu だけで回し、上の項目を確かめる。テスト結果は `go test -json` を `scripts/test_report.py` で整形し、失敗したテストを PR の該当行への annotation と Job Summary に出す。カバレッジは Job Summary に出し、パッケージごとの下限 (`.github/coverage-baseline.txt`) を `scripts/coverage_ratchet.py` で守らせる (0.5 ポイントまでの低下は許す)。カバレッジが上がったら、同じ PR で下限の数字も上げる。下げるときは理由を PR に書く。
@@ -105,11 +105,18 @@ workflow ファイル自体の検査は `workflow-lint.yml` が行う (`.github/
 ## バージョンとリリース
 - [SemVer](https://semver.org/) に従う。1.0.0 までは、破壊的な変更があれば MINOR を上げる。
 - 手順:
-  1. `CHANGELOG.md` の `[Unreleased]` を `[X.Y.Z] - YYYY-MM-DD` にし、`mygo.json` の `version` を合わせる PR を出してマージする
-  2. ユーザーが `vX.Y.Z` タグを main に push する
-  3. `release.yml` が動く (下記)。macOS (dmg) を GitHub Release の**下書き**に添付する (Windows は v0.1.0 の範囲外)
-  4. ユーザーが下書きの内容 (ノート、dmg、`SHA256SUMS.txt`) を確認し、**公開する**
-  5. 成果物を Mac で起動して確認する
+  1. `release-please.yml` が main の Conventional Commits から**リリース PR** (`chore(main): release X.Y.Z`) を作り、`mygo.json` の `version` と `CHANGELOG.md` を更新する。`feat:` は MINOR、`fix:` は PATCH (1.0.0 までは破壊的変更も MINOR)。`docs` `ci` `chore` `test` `refactor` `build` は CHANGELOG に載らない。版や文面を直したいときは、リリース PR のブランチを直接編集する
+  2. ユーザーがリリース PR をレビューしてマージする
+  3. ユーザーが `vX.Y.Z` タグを main に push する
+  4. `release.yml` が動く (下記)。macOS (dmg) を GitHub Release の**下書き**に添付する (Windows は v0.1.0 の範囲外)
+  5. ユーザーが下書きの内容 (ノート、dmg、`SHA256SUMS.txt`) を確認し、**公開する**
+  6. 成果物を Mac で起動して確認する
+
+release-please はタグも GitHub Release も作らない (`skip-github-release`)。タグを push するのはユーザーのままで、下書きリリースの作成は `release.yml` が行う。注意点:
+- リリース PR は `GITHUB_TOKEN` で作られるので、**CI が自動では走らない**。必須チェックの `check` を走らせるには、リリース PR のブランチに空コミットを push する (`git commit --allow-empty`)。PR を close / reopen すると release-please が PR を見失うことがあるので避ける。
+- リポジトリの設定「Allow GitHub Actions to create and approve pull requests」を有効にしておく (ユーザーの作業)。
+- リリース PR をマージしたあと、次の release-please の実行が「untagged, merged release PRs」で止まることがある (タグを作らないため)。その場合はマージ済みのリリース PR のラベル `autorelease: pending` を `autorelease: tagged` に付け替える。
+- `version.txt` は release-please の `simple` 型が管理するファイルで、版の確認には使わない (正は `mygo.json`)。
 
 ### 成果物を Mac で試す
 CI が作った成果物は、ブラウザを通さずに取得する。Chrome は署名のない dmg をブロックすることがあり、`gh` で保存したファイルには macOS の隔離属性も付かない。
