@@ -1,0 +1,8 @@
+# Statement coverage floor per package (scripts/coverage_ratchet.py).
+# Raise a number when coverage rises; lowering one needs a reason in the PR.
+github.com/naoya03708/pokedex-app 0.0
+github.com/naoya03708/pokedex-app/internal/app 100.0
+github.com/naoya03708/pokedex-app/internal/pokeapi 91.8
+github.com/naoya03708/pokedex-app/internal/tools/cilocal 62.9
+github.com/naoya03708/pokedex-app/internal/tools/notices 70.0
+github.com/naoya03708/pokedex-app/internal/ui 97.5

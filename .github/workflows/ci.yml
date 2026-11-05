@@ -47,6 +47,10 @@ jobs:
       - name: go test
         run: go test -race -coverprofile=coverage.out ./...
 
+      # Fails when a package's coverage falls below .github/coverage-baseline.txt.
+      - name: Coverage ratchet
+        run: python3 scripts/coverage_ratchet.py coverage.out .github/coverage-baseline.txt
+
       - name: Claude hook tests
         run: python3 -m unittest discover -s .claude/hooks
 
