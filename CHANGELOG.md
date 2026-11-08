@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/naoya03708/pokedex-app/compare/v0.2.1...v0.3.0) (2026-11-08)
+
+
+### Added
+
+* show sprites in the result rows ([#59](https://github.com/naoya03708/pokedex-app/issues/59)) ([1ea2902](https://github.com/naoya03708/pokedex-app/commit/1ea290238f4c582acd0860a62d94737751ee3a20))
+* show the Pokédex description in the detail pane ([#57](https://github.com/naoya03708/pokedex-app/issues/57)) ([16c8c5d](https://github.com/naoya03708/pokedex-app/commit/16c8c5d78a0f1fcafe36bc5fad05c860b9e0aac0))
+
 ## [0.2.1] - 2026-11-02
 
 Fixes two defects in the result list.
