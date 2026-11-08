@@ -614,3 +614,76 @@ func TestUI_FR6_UndecodableImageLeavesTheRowAsIfThereWasNone(t *testing.T) {
 		t.Error("something was drawn for an image that does not decode")
 	}
 }
+
+// thumbColumns returns the first and last x of the magenta pixels in the
+// horizontal band of a result row.
+func (h *harness) thumbColumns(r mui.Rect) (first, last int) {
+	img := h.tt.Image()
+	first, last = -1, -1
+	for y := int(r.Y); y < int(r.Y+r.H); y++ {
+		for x := img.Rect.Min.X; x < min(img.Rect.Max.X, img.Rect.Min.X+260); x++ {
+			if img.RGBAAt(x, y) == magenta {
+				if first < 0 {
+					first = x
+				}
+				last = x
+			}
+		}
+	}
+	return first, last
+}
+
+func TestUI_FR6_RowOrderIsNumberNameThenSprite(t *testing.T) {
+	img := solidPNG(t, magenta)
+	h := newHarness(t, fakeSource{spriteByID: func(context.Context, int) ([]byte, error) { return img, nil }})
+	h.start()
+	h.run(len(entries))
+
+	num, ok1 := h.tt.Find("#025")
+	row, ok2 := h.tt.Find("pikachu") // the clickable row, not the name text
+	if !ok1 || !ok2 {
+		t.Fatalf("missing: %v %v", ok1, ok2)
+	}
+	first, last := h.thumbColumns(mui.Rect{Y: row.Y, H: row.H})
+
+	// Then the sprite is right of the number, and ends at the row's right
+	// padding, the same place in every row
+	if first < 0 || float32(first) < num.X+num.W {
+		t.Errorf("sprite starts at x=%d, left of the end of the number %v", first, num.X+num.W)
+	}
+	if want := row.X + row.W - 10; float32(last) < want-6 || float32(last) > want {
+		t.Errorf("sprite ends at x=%d, want about %v (the row's right edge)", last, want)
+	}
+	other, _ := h.tt.Find("mr-mime")
+	_, lastOther := h.thumbColumns(mui.Rect{Y: other.Y, H: other.H})
+	if last != lastOther {
+		t.Errorf("sprites are not aligned at the right: %d vs %d", last, lastOther)
+	}
+}
+
+func TestUI_FR6_LongNameKeepsTheSpriteInsideTheListAndTheRowHeight(t *testing.T) {
+	img := solidPNG(t, magenta)
+	long := []pokeapi.Entry{{ID: 25, Name: "pikachu"}, {ID: 10196, Name: "charizard-mega-x-gigantamax"}}
+	h := newHarness(t, fakeSource{
+		list:       func(context.Context) ([]pokeapi.Entry, error) { return long, nil },
+		spriteByID: func(context.Context, int) ([]byte, error) { return img, nil }})
+	h.start()
+	h.run(len(long))
+
+	short, ok1 := h.tt.Find("pikachu")
+	name, ok2 := h.tt.Find("charizard-mega-x-gigantamax")
+	if !ok1 || !ok2 {
+		t.Fatalf("rows not found: %v %v", ok1, ok2)
+	}
+	first, last := h.thumbColumns(mui.Rect{Y: name.Y, H: name.H})
+
+	if first < 0 {
+		t.Fatal("the sprite was pushed out of the list (nothing drawn in the row)")
+	}
+	if last >= 260 {
+		t.Errorf("sprite right edge x=%d is outside the 260 wide list", last)
+	}
+	if name.H != short.H {
+		t.Errorf("a long name changed the row height: %v vs %v (it must end with an ellipsis, not wrap)", name.H, short.H)
+	}
+}

@@ -110,10 +110,11 @@ func (v *View) rows(c *mui.Context) {
 	list := mui.List(c, &v.list, len(vis)).Grow(1).Rows(func(r mui.ListRow) {
 		e := vis[r.Index]
 		row := mui.Row(r.Context).Gap(8).Padding(6, 10).AlignItems(mui.Center).Children(func() {
-			v.thumb(r.Context, e.ID)
 			mui.Textf(r.Context, "#%03d", e.ID).TextColor(rowNumberColor(th, r.Selected())).
 				Width(numberColumnWidth).NoWrap()
-			mui.Text(r.Context, e.Name)
+			// The name takes the free width, so the sprites end at the same edge.
+			mui.Text(r.Context, e.Name).Grow(1).MinWidth(0).MaxLines(1)
+			v.thumb(r.Context, e.ID)
 		})
 		if row.Clicked() {
 			clicked = r.Index
