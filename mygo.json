@@ -1,6 +1,6 @@
 {
   "name": "Pokedex",
   "identifier": "com.github.naoya03708.pokedex",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "out": "build"
 }
