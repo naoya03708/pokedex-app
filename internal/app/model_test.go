@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -23,6 +24,8 @@ type fakeSource struct {
 	sprite func(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error)
 	// description is optional: Pokémon without a SpeciesID never ask for one.
 	description func(ctx context.Context, p *pokeapi.Pokemon) (string, error)
+	// spriteByID is optional: only the result rows ask for it.
+	spriteByID func(ctx context.Context, id int) ([]byte, error)
 }
 
 func (f fakeSource) List(ctx context.Context) ([]pokeapi.Entry, error) { return f.list(ctx) }
@@ -36,6 +39,10 @@ func (f fakeSource) Sprite(ctx context.Context, p *pokeapi.Pokemon) ([]byte, err
 
 func (f fakeSource) Description(ctx context.Context, p *pokeapi.Pokemon) (string, error) {
 	return f.description(ctx, p)
+}
+
+func (f fakeSource) SpriteByID(ctx context.Context, id int) ([]byte, error) {
+	return f.spriteByID(ctx, id)
 }
 
 func okList(context.Context) ([]pokeapi.Entry, error) { return entries, nil }
@@ -603,4 +610,163 @@ func TestModel_FR5_StaleDescriptionIsDiscardedAndCanceled(t *testing.T) {
 		t.Fatalf("got %q %q", m.Selected, m.Description)
 	}
 	q.assertEmpty(t)
+}
+
+func okThumb(_ context.Context, id int) ([]byte, error) {
+	return []byte(fmt.Sprintf("png:%d", id)), nil
+}
+
+func TestModel_FR6_ThumbIsLoadingThenReady(t *testing.T) {
+	m, q := newModel(fakeSource{list: okList, spriteByID: okThumb})
+	if _, st := m.Thumb(25); st != app.Idle {
+		t.Fatalf("before request: %v", st)
+	}
+
+	m.RequestThumb(25)
+
+	if b, st := m.Thumb(25); st != app.Loading || b != nil {
+		t.Fatalf("after request: %v %q", st, b)
+	}
+	q.run(t)
+	if b, st := m.Thumb(25); st != app.Ready || string(b) != "png:25" {
+		t.Fatalf("after result: %v %q", st, b)
+	}
+}
+
+func TestModel_FR6_RequestingAgainDoesNotRefetch(t *testing.T) {
+	var calls atomic.Int32
+	m, q := newModel(fakeSource{list: okList, spriteByID: func(_ context.Context, id int) ([]byte, error) {
+		calls.Add(1)
+		return []byte("png"), nil
+	}})
+
+	m.RequestThumb(25)
+	m.RequestThumb(25) // while loading: a rebuilt frame asks again
+	q.run(t)
+	m.RequestThumb(25) // once ready
+
+	q.assertEmpty(t)
+	if calls.Load() != 1 {
+		t.Fatalf("fetches = %d, want 1", calls.Load())
+	}
+}
+
+func TestModel_FR6_FailedThumbIsNotRetriedAndShowsNothing(t *testing.T) {
+	var calls atomic.Int32
+	m, q := newModel(fakeSource{list: okList, spriteByID: func(context.Context, int) ([]byte, error) {
+		calls.Add(1)
+		return nil, pokeapi.ErrNotFound
+	}})
+
+	m.RequestThumb(10196)
+	q.run(t)
+	m.RequestThumb(10196)
+
+	if b, st := m.Thumb(10196); st != app.Failed || b != nil {
+		t.Fatalf("got %v %q", st, b)
+	}
+	q.assertEmpty(t)
+	if calls.Load() != 1 {
+		t.Fatalf("fetches = %d, want 1", calls.Load())
+	}
+}
+
+func TestModel_FR6_AtMostFourThumbsAreFetchedAtOnce(t *testing.T) {
+	// Given a source that holds every fetch until released
+	var running, peak atomic.Int32
+	release := make(chan struct{})
+	started := make(chan struct{}, 16)
+	m, q := newModel(fakeSource{list: okList, spriteByID: func(_ context.Context, id int) ([]byte, error) {
+		n := running.Add(1)
+		for {
+			p := peak.Load()
+			if n <= p || peak.CompareAndSwap(p, n) {
+				break
+			}
+		}
+		started <- struct{}{}
+		<-release
+		running.Add(-1)
+		return []byte("png"), nil
+	}})
+
+	// When ten rows ask at once
+	for id := 1; id <= 10; id++ {
+		m.RequestThumb(id)
+	}
+	for range 4 {
+		<-started
+	}
+	time.Sleep(50 * time.Millisecond) // a fifth fetch, if the limit were broken, would start now
+
+	// Then only four run, and the rest follow as slots free up
+	if got := peak.Load(); got != 4 {
+		t.Fatalf("concurrent fetches = %d, want 4", got)
+	}
+	close(release)
+	for range 10 {
+		q.run(t)
+	}
+	if peak.Load() > 4 {
+		t.Fatalf("peak = %d", peak.Load())
+	}
+	for id := 1; id <= 10; id++ {
+		if _, st := m.Thumb(id); st != app.Ready {
+			t.Errorf("thumb %d: %v", id, st)
+		}
+	}
+}
+
+func TestModel_FR4_CloseCancelsThumbFetchesAndIgnoresResults(t *testing.T) {
+	started := make(chan context.Context, 1)
+	release := make(chan struct{})
+	m, q := newModel(fakeSource{list: okList, spriteByID: func(ctx context.Context, id int) ([]byte, error) {
+		started <- ctx
+		<-release
+		return []byte("png"), nil
+	}})
+	m.RequestThumb(25)
+	ctx := recvCtx(t, started)
+
+	m.Close()
+	close(release)
+
+	if ctx.Err() == nil {
+		t.Error("thumb fetch was not canceled")
+	}
+	q.run(t)
+	if _, st := m.Thumb(25); st == app.Ready {
+		t.Error("result applied after Close")
+	}
+	m.RequestThumb(26) // no new work after Close
+	q.assertEmpty(t)
+}
+
+func TestModel_FR4_CloseReleasesThumbsStillWaitingForASlot(t *testing.T) {
+	// Given four fetches holding every slot, and a fifth row waiting
+	var calls atomic.Int32
+	release := make(chan struct{})
+	started := make(chan struct{}, 8)
+	m, _ := newModel(fakeSource{list: okList, spriteByID: func(ctx context.Context, id int) ([]byte, error) {
+		calls.Add(1)
+		started <- struct{}{}
+		<-release
+		return []byte("png"), nil
+	}})
+	for id := 1; id <= 5; id++ {
+		m.RequestThumb(id)
+	}
+	for range 4 {
+		<-started
+	}
+
+	// When the window closes and the running fetches finish
+	m.Close()
+	close(release)
+	time.Sleep(50 * time.Millisecond)
+
+	// Then the waiting row never starts its fetch
+	if calls.Load() != 4 {
+		t.Fatalf("fetches = %d, want 4", calls.Load())
+	}
 }

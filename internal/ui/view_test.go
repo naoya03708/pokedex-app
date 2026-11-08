@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
+	"image/draw"
 	"image/png"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -47,6 +50,9 @@ type fakeSource struct {
 	sprite func(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error)
 	// description is optional: Pokémon without a SpeciesID never ask for one.
 	description func(ctx context.Context, p *pokeapi.Pokemon) (string, error)
+	// spriteByID is for the result rows. The harness default never answers, so
+	// the rows' fetches do not interleave with the posts other tests count.
+	spriteByID func(ctx context.Context, id int) ([]byte, error)
 }
 
 func (f fakeSource) List(ctx context.Context) ([]pokeapi.Entry, error) { return f.list(ctx) }
@@ -59,6 +65,10 @@ func (f fakeSource) Sprite(ctx context.Context, p *pokeapi.Pokemon) ([]byte, err
 
 func (f fakeSource) Description(ctx context.Context, p *pokeapi.Pokemon) (string, error) {
 	return f.description(ctx, p)
+}
+
+func (f fakeSource) SpriteByID(ctx context.Context, id int) ([]byte, error) {
+	return f.spriteByID(ctx, id)
 }
 
 func okList(context.Context) ([]pokeapi.Entry, error) { return entries, nil }
@@ -90,6 +100,12 @@ func newHarness(t *testing.T, src fakeSource) *harness {
 	if src.sprite == nil {
 		img := pngBytes(t)
 		src.sprite = func(context.Context, *pokeapi.Pokemon) ([]byte, error) { return img, nil }
+	}
+	if src.spriteByID == nil {
+		src.spriteByID = func(ctx context.Context, _ int) ([]byte, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
 	}
 	h := &harness{t: t, q: make(chan func(), 32)}
 	h.m = app.New(src, func(fn func()) { h.q <- fn })
@@ -472,4 +488,129 @@ func TestUI_FR5_FailedDescriptionLeavesNoGapOrError(t *testing.T) {
 	h.wantText("Base stats")
 	h.wantNoText("offline")
 	h.wantNoText("Retry")
+}
+
+// magenta is a color the theme never uses, so finding it means a thumbnail was drawn.
+var magenta = color.RGBA{R: 255, B: 255, A: 255}
+
+func solidPNG(t *testing.T, c color.Color) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+	draw.Draw(img, img.Bounds(), image.NewUniform(c), image.Point{}, draw.Src)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// thumbsDrawn counts magenta pixels in the result list (the left 260 DIPs).
+func (h *harness) thumbsDrawn() int {
+	img := h.tt.Image()
+	n := 0
+	for y := img.Rect.Min.Y; y < img.Rect.Max.Y; y++ {
+		for x := img.Rect.Min.X; x < min(img.Rect.Max.X, img.Rect.Min.X+260); x++ {
+			if img.RGBAAt(x, y) == magenta {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+func TestUI_FR6_RowsShowTheirSpriteOnceFetched(t *testing.T) {
+	img := solidPNG(t, magenta)
+	h := newHarness(t, fakeSource{spriteByID: func(context.Context, int) ([]byte, error) { return img, nil }})
+	h.start()
+	if got := h.thumbsDrawn(); got != 0 {
+		t.Fatalf("drawn before any fetch: %d", got)
+	}
+
+	h.run(len(entries)) // one result per visible row
+
+	if h.thumbsDrawn() == 0 {
+		t.Fatal("no thumbnail was drawn")
+	}
+	h.wantText("pikachu")
+	h.wantText("#025")
+}
+
+func TestUI_FR6_RowsWithoutSpriteKeepTheirLayout(t *testing.T) {
+	// Given the same list, once with sprites and once where every fetch fails
+	img := solidPNG(t, magenta)
+	with := newHarness(t, fakeSource{spriteByID: func(context.Context, int) ([]byte, error) { return img, nil }})
+	with.start()
+	with.run(len(entries))
+	without := newHarness(t, fakeSource{spriteByID: func(context.Context, int) ([]byte, error) {
+		return nil, pokeapi.ErrNotFound
+	}})
+	without.start()
+	without.run(len(entries))
+
+	// Then every row has the same position for its number and name
+	for _, s := range []string{"#001", "#025", "#122", "mr-mime"} {
+		a, ok1 := with.tt.Find(s)
+		b, ok2 := without.tt.Find(s)
+		if !ok1 || !ok2 || a != b {
+			t.Errorf("%s moved: %v (%v) vs %v (%v)", s, a, ok1, b, ok2)
+		}
+	}
+	if without.thumbsDrawn() != 0 {
+		t.Error("a failed fetch drew something")
+	}
+}
+
+func TestUI_FR6_OnlyBuiltRowsAreFetched(t *testing.T) {
+	// Given a list far longer than the window
+	var fetched sync.Map
+	big := make([]pokeapi.Entry, 500)
+	for i := range big {
+		big[i] = pokeapi.Entry{ID: i + 1, Name: fmt.Sprintf("mon-%d", i+1)}
+	}
+	h := newHarness(t, fakeSource{
+		list: func(context.Context) ([]pokeapi.Entry, error) { return big, nil },
+		spriteByID: func(ctx context.Context, id int) ([]byte, error) {
+			fetched.Store(id, true)
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}})
+
+	h.start()
+	time.Sleep(100 * time.Millisecond)
+
+	// Then far rows were never requested
+	n := 0
+	fetched.Range(func(k, _ any) bool { n++; return true })
+	if n == 0 || n > 40 {
+		t.Fatalf("fetched %d sprites for a window showing about 15 rows", n)
+	}
+	if _, far := fetched.Load(400); far {
+		t.Fatal("a row far below the window was fetched")
+	}
+}
+
+func TestUI_FR6_ClickingARowWithASpriteStillShowsItsDetail(t *testing.T) {
+	img := solidPNG(t, magenta)
+	h := newHarness(t, fakeSource{spriteByID: func(context.Context, int) ([]byte, error) { return img, nil }})
+	h.start()
+	h.run(len(entries))
+
+	h.click("pikachu")
+
+	h.wantText("#025")
+	h.wantText("Pikachu")
+}
+
+func TestUI_FR6_UndecodableImageLeavesTheRowAsIfThereWasNone(t *testing.T) {
+	h := newHarness(t, fakeSource{spriteByID: func(context.Context, int) ([]byte, error) {
+		return []byte("\x89PNG\r\n\x1a\ntruncated"), nil
+	}})
+	h.start()
+
+	h.run(len(entries))
+
+	h.wantText("pikachu")
+	if h.thumbsDrawn() != 0 {
+		t.Error("something was drawn for an image that does not decode")
+	}
 }

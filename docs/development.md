@@ -31,6 +31,7 @@ internal/
       Get(ctx context.Context, name string) (*pokeapi.Pokemon, error)
       Sprite(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error)
       Description(ctx context.Context, p *pokeapi.Pokemon) (string, error)
+      SpriteByID(ctx context.Context, id int) ([]byte, error)
   }
   ```
 - 取得は goroutine で行い、結果は `Window.Update` で Model に反映する。ジョブには世代番号を付け、古い世代の結果は捨てる (FR-4)。

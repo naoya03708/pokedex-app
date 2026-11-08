@@ -17,7 +17,11 @@ type Source interface {
 	Get(ctx context.Context, name string) (*pokeapi.Pokemon, error)
 	Sprite(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error)
 	Description(ctx context.Context, p *pokeapi.Pokemon) (string, error)
+	SpriteByID(ctx context.Context, id int) ([]byte, error)
 }
+
+// maxThumbFetches is how many row sprites are fetched at the same time.
+const maxThumbFetches = 4
 
 // Status is the state of one asynchronous fetch.
 type Status int
@@ -59,6 +63,11 @@ type Model struct {
 	cancel context.CancelFunc
 	closed bool
 
+	// thumbs are the sprites of the result rows, by Pokédex number. A row that
+	// failed stays Failed: it is not fetched again in this session.
+	thumbs    map[int]thumb
+	thumbSlot chan struct{} // holds one token per running thumb fetch
+
 	entries   []pokeapi.Entry
 	visible   []pokeapi.Entry // Filter(entries, visQuery), valid if visOK
 	visQuery  string
@@ -71,7 +80,52 @@ type Model struct {
 // New returns a Model that fetches from src and publishes through post.
 func New(src Source, post Poster) *Model {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Model{src: src, post: post, ctx: ctx, cancel: cancel}
+	return &Model{
+		src: src, post: post, ctx: ctx, cancel: cancel,
+		thumbs: map[int]thumb{}, thumbSlot: make(chan struct{}, maxThumbFetches),
+	}
+}
+
+type thumb struct {
+	status Status
+	png    []byte
+}
+
+// Thumb returns the sprite (PNG) of a result row and its state. The bytes are
+// shared and must not be modified.
+func (m *Model) Thumb(id int) ([]byte, Status) {
+	t := m.thumbs[id]
+	return t.png, t.status
+}
+
+// RequestThumb starts fetching the sprite of a result row, unless it is
+// already loading, loaded or failed, so the view may call it in every frame.
+// At most maxThumbFetches run at once.
+func (m *Model) RequestThumb(id int) {
+	if m.closed || m.thumbs[id].status != Idle {
+		return
+	}
+	m.thumbs[id] = thumb{status: Loading}
+	src, post, ctx, slot := m.src, m.post, m.ctx, m.thumbSlot
+	go func() {
+		select {
+		case slot <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
+		img, err := src.SpriteByID(ctx, id)
+		<-slot
+		post(func() {
+			if m.closed {
+				return
+			}
+			if err != nil {
+				m.thumbs[id] = thumb{status: Failed}
+				return
+			}
+			m.thumbs[id] = thumb{status: Ready, png: img}
+		})
+	}()
 }
 
 // Start begins loading the name list. It does nothing while a load is
