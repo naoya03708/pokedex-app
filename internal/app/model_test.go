@@ -21,6 +21,8 @@ type fakeSource struct {
 	get  func(ctx context.Context, name string) (*pokeapi.Pokemon, error)
 	// sprite is optional: Pokémon without a SpriteURL never ask for one.
 	sprite func(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error)
+	// description is optional: Pokémon without a SpeciesID never ask for one.
+	description func(ctx context.Context, p *pokeapi.Pokemon) (string, error)
 }
 
 func (f fakeSource) List(ctx context.Context) ([]pokeapi.Entry, error) { return f.list(ctx) }
@@ -30,6 +32,10 @@ func (f fakeSource) Get(ctx context.Context, n string) (*pokeapi.Pokemon, error)
 
 func (f fakeSource) Sprite(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error) {
 	return f.sprite(ctx, p)
+}
+
+func (f fakeSource) Description(ctx context.Context, p *pokeapi.Pokemon) (string, error) {
+	return f.description(ctx, p)
 }
 
 func okList(context.Context) ([]pokeapi.Entry, error) { return entries, nil }
@@ -499,6 +505,102 @@ func TestModel_FR3_NoSpriteURLShowsPlaceholderState(t *testing.T) {
 
 	if m.DetailStatus != app.Ready || m.SpriteStatus != app.Failed || m.Sprite != nil {
 		t.Fatalf("got %v %v %q", m.DetailStatus, m.SpriteStatus, m.Sprite)
+	}
+	q.assertEmpty(t)
+}
+
+func withSpecies(_ context.Context, n string) (*pokeapi.Pokemon, error) {
+	return &pokeapi.Pokemon{ID: 25, Name: n, SpeciesID: 25}, nil
+}
+
+func TestModel_FR5_DescriptionArrivesAfterDetail(t *testing.T) {
+	m, q := newModel(fakeSource{list: okList, get: withSpecies,
+		description: func(_ context.Context, p *pokeapi.Pokemon) (string, error) { return "text of " + p.Name, nil }})
+
+	m.Select("pikachu")
+	q.run(t)
+
+	// Then the detail is shown first, while the description is still loading
+	if m.DetailStatus != app.Ready || m.DescStatus != app.Loading || m.Description != "" {
+		t.Fatalf("after detail: %v %v %q", m.DetailStatus, m.DescStatus, m.Description)
+	}
+	q.run(t)
+	if m.DescStatus != app.Ready || m.Description != "text of pikachu" {
+		t.Fatalf("after description: %v %q", m.DescStatus, m.Description)
+	}
+}
+
+func TestModel_FR5_DescriptionFailureKeepsDetailAndIsNotAnError(t *testing.T) {
+	m, q := newModel(fakeSource{list: okList, get: withSpecies,
+		description: func(context.Context, *pokeapi.Pokemon) (string, error) { return "", errors.New("offline") }})
+
+	m.Select("pikachu")
+	q.run(t)
+	q.run(t)
+
+	if m.DetailStatus != app.Ready || m.DetailErr != nil || m.Detail == nil {
+		t.Fatalf("detail: %v %v %+v", m.DetailStatus, m.DetailErr, m.Detail)
+	}
+	if m.DescStatus != app.Failed || m.Description != "" {
+		t.Fatalf("description: %v %q", m.DescStatus, m.Description)
+	}
+}
+
+func TestModel_FR5_NoSpeciesMeansNoDescriptionRequest(t *testing.T) {
+	m, q := newModel(fakeSource{list: okList, get: okGet}) // description is nil: a call would panic
+
+	m.Select("pikachu")
+	q.run(t)
+
+	if m.DescStatus != app.Idle {
+		t.Fatalf("DescStatus = %v, want Idle", m.DescStatus)
+	}
+	q.assertEmpty(t)
+}
+
+func TestModel_FR5_NewSelectionClearsPreviousDescription(t *testing.T) {
+	m, q := newModel(fakeSource{list: okList, get: withSpecies,
+		description: func(_ context.Context, p *pokeapi.Pokemon) (string, error) { return "text of " + p.Name, nil }})
+	m.Select("pikachu")
+	q.run(t)
+	q.run(t)
+
+	m.Select("raichu")
+
+	if m.Description != "" || m.DescStatus != app.Idle {
+		t.Fatalf("not cleared: %v %q", m.DescStatus, m.Description)
+	}
+}
+
+func TestModel_FR5_StaleDescriptionIsDiscardedAndCanceled(t *testing.T) {
+	// Given a description fetch that ignores cancellation and finishes on command
+	release := make(chan struct{})
+	started := make(chan context.Context, 1)
+	m, q := newModel(fakeSource{list: okList, get: withSpecies,
+		description: func(ctx context.Context, p *pokeapi.Pokemon) (string, error) {
+			if p.Name == "pikachu" {
+				started <- ctx
+				<-release
+			}
+			return "text of " + p.Name, nil
+		}})
+	m.Select("pikachu")
+	q.run(t)
+	ctx := recvCtx(t, started)
+
+	// When another row is selected before it finishes
+	m.Select("raichu")
+	close(release)
+
+	// Then the first fetch is canceled and its text is not shown
+	if ctx.Err() == nil {
+		t.Error("previous description fetch was not canceled")
+	}
+	q.run(t) // raichu's detail, raichu's description and the stale text, in any order
+	q.run(t)
+	q.run(t)
+	if m.Selected != "raichu" || m.Description != "text of raichu" {
+		t.Fatalf("got %q %q", m.Selected, m.Description)
 	}
 	q.assertEmpty(t)
 }

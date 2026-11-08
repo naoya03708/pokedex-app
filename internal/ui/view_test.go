@@ -45,6 +45,8 @@ type fakeSource struct {
 	list   func(ctx context.Context) ([]pokeapi.Entry, error)
 	get    func(ctx context.Context, name string) (*pokeapi.Pokemon, error)
 	sprite func(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error)
+	// description is optional: Pokémon without a SpeciesID never ask for one.
+	description func(ctx context.Context, p *pokeapi.Pokemon) (string, error)
 }
 
 func (f fakeSource) List(ctx context.Context) ([]pokeapi.Entry, error) { return f.list(ctx) }
@@ -53,6 +55,10 @@ func (f fakeSource) Get(ctx context.Context, n string) (*pokeapi.Pokemon, error)
 }
 func (f fakeSource) Sprite(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error) {
 	return f.sprite(ctx, p)
+}
+
+func (f fakeSource) Description(ctx context.Context, p *pokeapi.Pokemon) (string, error) {
+	return f.description(ctx, p)
 }
 
 func okList(context.Context) ([]pokeapi.Entry, error) { return entries, nil }
@@ -433,4 +439,37 @@ func TestUI_FR2_LongNameAndTwoStatColumnsFitTheMinimumWindow(t *testing.T) {
 	if speed.Y+speed.H > winH {
 		t.Errorf("last stat row ends at %.0f, below the %d high window", speed.Y+speed.H, winH)
 	}
+}
+
+func withSpeciesDetail(ctx context.Context, name string) (*pokeapi.Pokemon, error) {
+	p, _ := detailFor(ctx, name)
+	p.SpeciesID = 25
+	return p, nil
+}
+
+func TestUI_FR5_DescriptionAppearsAfterTheDetail(t *testing.T) {
+	h := newHarness(t, fakeSource{get: withSpeciesDetail,
+		description: func(context.Context, *pokeapi.Pokemon) (string, error) { return "It stores electricity.", nil }})
+	h.start()
+
+	h.click("pikachu")
+	h.run(1)
+	h.wantText("Base stats")
+	h.wantNoText("It stores electricity.")
+	h.run(2) // sprite and description, in either order
+
+	h.wantText("It stores electricity.")
+}
+
+func TestUI_FR5_FailedDescriptionLeavesNoGapOrError(t *testing.T) {
+	h := newHarness(t, fakeSource{get: withSpeciesDetail,
+		description: func(context.Context, *pokeapi.Pokemon) (string, error) { return "", errors.New("offline") }})
+	h.start()
+
+	h.click("pikachu")
+	h.run(3)
+
+	h.wantText("Base stats")
+	h.wantNoText("offline")
+	h.wantNoText("Retry")
 }

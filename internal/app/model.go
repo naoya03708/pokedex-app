@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/naoya03708/pokedex-app/internal/pokeapi"
 )
@@ -15,6 +16,7 @@ type Source interface {
 	List(ctx context.Context) ([]pokeapi.Entry, error)
 	Get(ctx context.Context, name string) (*pokeapi.Pokemon, error)
 	Sprite(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error)
+	Description(ctx context.Context, p *pokeapi.Pokemon) (string, error)
 }
 
 // Status is the state of one asynchronous fetch.
@@ -45,6 +47,11 @@ type Model struct {
 
 	Sprite       []byte // PNG of the selected Pokémon, once SpriteStatus is Ready
 	SpriteStatus Status
+
+	// Description is the Pokédex text of the selected Pokémon, once DescStatus
+	// is Ready. Failed (or a Pokémon with no text) means the UI shows nothing.
+	Description string
+	DescStatus  Status
 
 	src    Source
 	post   Poster
@@ -124,12 +131,14 @@ func (m *Model) fetchDetail(name string) {
 	m.detailGen++
 	m.Selected, m.Detail, m.DetailErr, m.DetailStatus = name, nil, nil, Loading
 	m.Sprite, m.SpriteStatus = nil, Idle
+	m.Description, m.DescStatus = "", Idle
 
 	gen, src, post := m.detailGen, m.src, m.post
 	go func() {
 		defer cancel() // release the child context once the fetches are over
 		p, err := src.Get(ctx, name)
 		withSprite := err == nil && p.SpriteURL != ""
+		withDesc := err == nil && p.SpeciesID > 0
 		post(func() {
 			if m.closed || gen != m.detailGen {
 				return
@@ -139,11 +148,34 @@ func (m *Model) fetchDetail(name string) {
 				return
 			}
 			m.DetailStatus, m.Detail = Ready, p
+			if withDesc {
+				m.DescStatus = Loading
+			}
 			m.SpriteStatus = Loading
 			if !withSprite {
 				m.SpriteStatus = Failed // nothing to show: the UI draws a placeholder
 			}
 		})
+		// The description is fetched beside the sprite. A failure shows nothing.
+		var wg sync.WaitGroup
+		defer wg.Wait() // keep ctx alive until it is done
+		if withDesc {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				text, descErr := src.Description(ctx, p)
+				post(func() {
+					if m.closed || gen != m.detailGen {
+						return
+					}
+					if descErr != nil {
+						m.DescStatus = Failed
+						return
+					}
+					m.DescStatus, m.Description = Ready, text
+				})
+			}()
+		}
 		if !withSprite {
 			return
 		}

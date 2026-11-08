@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,6 +33,7 @@ const pikachuJSON = `{"id":25,"name":"pikachu",
   {"base_stat":50,"stat":{"name":"special-attack"}},
   {"base_stat":50,"stat":{"name":"special-defense"}},
   {"base_stat":90,"stat":{"name":"speed"}}],
+ "species":{"url":"https://pokeapi.co/api/v2/pokemon-species/25/"},
  "sprites":{"front_default":"https://img.example/25.png"}}`
 
 // fakeAPI serves the two PokeAPI endpoints and counts requests per path.
@@ -583,5 +586,189 @@ func TestSprite_OversizedResponseIsRejected(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "larger") {
 		t.Fatalf("err = %v, want size error", err)
+	}
+}
+
+// speciesJSON has Japanese and English entries, with line breaks and a form
+// feed inside the English ones, as the real API does.
+const speciesJSON = `{"flavor_text_entries":[
+ {"flavor_text":"ピカチュウ","language":{"name":"ja"}},
+ {"flavor_text":"old\ntext","language":{"name":"en"}},
+ {"flavor_text":"When several\nof these POKéMON\fgather, electricity\ncan build.","language":{"name":"en"}},
+ {"flavor_text":"ドイツ語","language":{"name":"de"}}]}`
+
+func descriptionAPI(t *testing.T, species string) (*fakeAPI, *pokeapi.Pokemon) {
+	t.Helper()
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/pokemon-species/25" {
+			w.Write([]byte(species))
+			return
+		}
+		http.NotFound(w, r)
+	})
+	return api, &pokeapi.Pokemon{ID: 25, Name: "pikachu", SpeciesID: 25}
+}
+
+func TestDescription_FR5_PicksLastEnglishEntryAndNormalizesWhitespace(t *testing.T) {
+	api, p := descriptionAPI(t, speciesJSON)
+	c := newClient(api, t.TempDir(), nil)
+
+	got, err := c.Description(context.Background(), p)
+
+	if err != nil || got != "When several of these POKéMON gather, electricity can build." {
+		t.Fatalf("got %q, %v", got, err)
+	}
+}
+
+func TestDescription_FR5_NoEnglishEntryIsNotFound(t *testing.T) {
+	api, p := descriptionAPI(t, `{"flavor_text_entries":[{"flavor_text":"ピカチュウ","language":{"name":"ja"}}]}`)
+	c := newClient(api, t.TempDir(), nil)
+
+	_, err := c.Description(context.Background(), p)
+
+	if !errors.Is(err, pokeapi.ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDescription_FR5_CachedInMemoryAndOnDisk(t *testing.T) {
+	api, p := descriptionAPI(t, speciesJSON)
+	dir := t.TempDir()
+	c := newClient(api, dir, nil)
+	want, _ := c.Description(context.Background(), p)
+
+	c.Description(context.Background(), p)
+	next, err := newClient(api, dir, nil).Description(context.Background(), p)
+
+	if err != nil || next != want {
+		t.Fatalf("next launch: %q, %v", next, err)
+	}
+	if api.hits.Load() != 1 {
+		t.Fatalf("requests = %d, want 1", api.hits.Load())
+	}
+}
+
+func TestDescription_FR5_MissingEnglishIsCachedToo(t *testing.T) {
+	api, p := descriptionAPI(t, `{"flavor_text_entries":[]}`)
+	c := newClient(api, t.TempDir(), nil)
+
+	c.Description(context.Background(), p)
+	c.Description(context.Background(), p)
+
+	if api.hits.Load() != 1 {
+		t.Fatalf("requests = %d, want 1", api.hits.Load())
+	}
+}
+
+func TestDescription_FR5_FormUsesSpeciesIDNotPokemonID(t *testing.T) {
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/pokemon-species/25" {
+			w.Write([]byte(speciesJSON))
+			return
+		}
+		http.NotFound(w, r)
+	})
+	form := &pokeapi.Pokemon{ID: 10196, Name: "pikachu-gmax", SpeciesID: 25}
+	c := newClient(api, t.TempDir(), nil)
+
+	got, err := c.Description(context.Background(), form)
+
+	if err != nil || got == "" {
+		t.Fatalf("got %q, %v", got, err)
+	}
+}
+
+func TestDescription_FR5_FailureIsNotCached(t *testing.T) {
+	var fail atomic.Bool
+	fail.Store(true)
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if fail.Load() {
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		}
+		w.Write([]byte(speciesJSON))
+	})
+	c := newClient(api, t.TempDir(), nil)
+	p := &pokeapi.Pokemon{ID: 25, SpeciesID: 25}
+	if _, err := c.Description(context.Background(), p); err == nil {
+		t.Fatal("want an error")
+	}
+
+	fail.Store(false)
+	got, err := c.Description(context.Background(), p)
+
+	if err != nil || got == "" {
+		t.Fatalf("retry: %q, %v", got, err)
+	}
+}
+
+func TestDescription_FR5_WithoutSpeciesIsNotFound(t *testing.T) {
+	c := newClient(newFakeAPI(t, nil), t.TempDir(), nil)
+
+	_, err := c.Description(context.Background(), &pokeapi.Pokemon{ID: 25, Name: "pikachu"})
+
+	if !errors.Is(err, pokeapi.ErrNotFound) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestDescription_FR4_CanceledContextStopsRequest(t *testing.T) {
+	api, p := descriptionAPI(t, speciesJSON)
+	c := newClient(api, "", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := c.Description(ctx, p)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestGet_FR5_ReadsSpeciesIDFromSpeciesURL(t *testing.T) {
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"id":10196,"name":"pikachu-gmax","types":[],"stats":[],
+		 "species":{"url":"https://pokeapi.co/api/v2/pokemon-species/25/"}}`))
+	})
+	c := newClient(api, t.TempDir(), nil)
+
+	p, err := c.Get(context.Background(), "pikachu-gmax")
+
+	if err != nil || p.ID != 10196 || p.SpeciesID != 25 {
+		t.Fatalf("got %+v, %v", p, err)
+	}
+}
+
+func TestGet_FR5_CacheWrittenBeforeSpeciesWasKnownIsRefetched(t *testing.T) {
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"id":25,"name":"pikachu","species":{"url":"https://pokeapi.co/api/v2/pokemon-species/25/"}}`))
+	})
+	dir := t.TempDir()
+	old := filepath.Join(dir, "pokemon")
+	os.MkdirAll(old, 0o700)
+	os.WriteFile(filepath.Join(old, "pikachu.json"), []byte(`{"ID":25,"Name":"pikachu"}`), 0o600)
+	c := newClient(api, dir, nil)
+
+	p, err := c.Get(context.Background(), "pikachu")
+
+	if err != nil || p.SpeciesID != 25 {
+		t.Fatalf("got %+v, %v", p, err)
+	}
+}
+
+func TestGet_FR5_OldCacheIsStillShownWhenTheRefetchFails(t *testing.T) {
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "offline", http.StatusServiceUnavailable)
+	})
+	dir := t.TempDir()
+	old := filepath.Join(dir, "pokemon")
+	os.MkdirAll(old, 0o700)
+	os.WriteFile(filepath.Join(old, "pikachu.json"), []byte(`{"ID":25,"Name":"pikachu"}`), 0o600)
+	c := newClient(api, dir, nil)
+
+	p, err := c.Get(context.Background(), "pikachu")
+
+	if err != nil || p.Name != "pikachu" || p.SpeciesID != 0 {
+		t.Fatalf("got %+v, %v", p, err)
 	}
 }

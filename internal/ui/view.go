@@ -160,6 +160,11 @@ func (v *View) card(c *mui.Context, p *pokeapi.Pokemon) {
 					})
 				})
 			})
+			// The Pokédex text, once it has arrived. Nothing is drawn while it
+			// loads or if there is none, so the stats do not wait for it.
+			if v.m.DescStatus == app.Ready && v.m.Description != "" {
+				mui.Text(c, v.m.Description).Padding(20, 28, 0)
+			}
 			mui.Column(c).Padding(24, 28).Gap(16).Children(func() {
 				mui.Row(c).AlignItems(mui.Center).Children(func() {
 					mui.Text(c, "Base stats").Bold().Grow(1)
