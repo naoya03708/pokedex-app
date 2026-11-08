@@ -57,6 +57,7 @@ type Pokemon struct {
 	Types     []string // primary type first
 	Stats     []Stat   // in API order: hp, attack, defense, special-attack, special-defense, speed
 	SpriteURL string
+	SpeciesID int // the /pokemon-species/ ID, which differs from ID for forms; 0 if unknown
 }
 
 // Options configures a Client. Zero values select production defaults.
@@ -88,6 +89,7 @@ type Client struct {
 	list    *listCache
 	details map[string]*Pokemon
 	sprites map[int][]byte
+	descs   map[int]string // by species ID; "" means the species has no English text
 }
 
 type listCache struct {
@@ -111,6 +113,7 @@ func New(o Options) *Client {
 		now:     o.Now,
 		details: map[string]*Pokemon{},
 		sprites: map[int][]byte{},
+		descs:   map[int]string{},
 	}
 	if c.base == "" {
 		c.base = defaultBaseURL
@@ -210,14 +213,21 @@ func (c *Client) Get(ctx context.Context, name string) (*Pokemon, error) {
 
 	file := filepath.Join("pokemon", name+".json")
 	var cached Pokemon
-	if c.readCache(file, &cached) && cached.Name != "" {
+	valid := c.readCache(file, &cached) && cached.Name != ""
+	if valid && cached.SpeciesID > 0 {
 		p = &cached
 	} else {
+		// A file written before SpeciesID existed lacks it: fetch again, but
+		// keep showing the old detail while offline.
 		var err error
 		if p, err = c.fetchPokemon(ctx, name); err != nil {
-			return nil, err
+			if !valid || ctx.Err() != nil {
+				return nil, err
+			}
+			p = &cached
+		} else {
+			c.writeCache(file, p)
 		}
-		c.writeCache(file, p)
 	}
 
 	c.mu.Lock()
@@ -245,6 +255,9 @@ func (c *Client) fetchPokemon(ctx context.Context, name string) (*Pokemon, error
 		Sprites struct {
 			FrontDefault string `json:"front_default"`
 		} `json:"sprites"`
+		Species struct {
+			URL string `json:"url"`
+		} `json:"species"`
 	}
 	if err := c.getJSON(ctx, c.base+"/pokemon/"+name, &body); err != nil {
 		return nil, err
@@ -252,6 +265,7 @@ func (c *Client) fetchPokemon(ctx context.Context, name string) (*Pokemon, error
 
 	sort.SliceStable(body.Types, func(i, j int) bool { return body.Types[i].Slot < body.Types[j].Slot })
 	p := &Pokemon{ID: body.ID, Name: body.Name, SpriteURL: body.Sprites.FrontDefault}
+	p.SpeciesID, _ = idFromURL(body.Species.URL)
 	for _, t := range body.Types {
 		p.Types = append(p.Types, t.Type.Name)
 	}
@@ -384,4 +398,62 @@ func (c *Client) Sprite(ctx context.Context, p *Pokemon) ([]byte, error) {
 	c.sprites[p.ID] = b
 	c.mu.Unlock()
 	return b, nil
+}
+
+// Description returns the English Pokédex text of p, cached without expiry
+// under its species number. A Pokémon without a species, or a species with no
+// English text, is ErrNotFound. The text has its line breaks replaced by
+// spaces.
+func (c *Client) Description(ctx context.Context, p *Pokemon) (string, error) {
+	if p == nil || p.SpeciesID <= 0 {
+		return "", ErrNotFound
+	}
+	id := p.SpeciesID
+
+	c.mu.Lock()
+	text, ok := c.descs[id]
+	c.mu.Unlock()
+	if !ok {
+		file := filepath.Join("species", strconv.Itoa(id)+".json")
+		var cached struct{ Text string }
+		if c.readCache(file, &cached) {
+			text = cached.Text
+		} else {
+			var err error
+			if text, err = c.fetchDescription(ctx, id); err != nil {
+				return "", err
+			}
+			c.writeCache(file, struct{ Text string }{text})
+		}
+		c.mu.Lock()
+		c.descs[id] = text
+		c.mu.Unlock()
+	}
+	if text == "" {
+		return "", ErrNotFound
+	}
+	return text, nil
+}
+
+// fetchDescription returns the text of the last English entry, or "" if there
+// is none.
+func (c *Client) fetchDescription(ctx context.Context, id int) (string, error) {
+	var body struct {
+		Entries []struct {
+			Text     string `json:"flavor_text"`
+			Language struct {
+				Name string `json:"name"`
+			} `json:"language"`
+		} `json:"flavor_text_entries"`
+	}
+	if err := c.getJSON(ctx, c.base+"/pokemon-species/"+strconv.Itoa(id), &body); err != nil {
+		return "", err
+	}
+	for i := len(body.Entries) - 1; i >= 0; i-- {
+		if e := body.Entries[i]; e.Language.Name == "en" {
+			// The API breaks lines (and pages) inside the sentence.
+			return strings.Join(strings.Fields(e.Text), " "), nil
+		}
+	}
+	return "", nil
 }
