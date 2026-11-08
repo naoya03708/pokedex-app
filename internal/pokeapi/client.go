@@ -28,7 +28,10 @@ const (
 	ListTTL = 7 * 24 * time.Hour
 
 	defaultBaseURL = "https://pokeapi.co/api/v2"
-	maxBodyBytes   = 16 << 20
+	// defaultSpriteBase is the PokeAPI sprite repository, where the images of
+	// "sprites.front_default" live, named by Pokémon number.
+	defaultSpriteBase = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon"
+	maxBodyBytes      = 16 << 20
 )
 
 // ErrNotFound is returned by Get when the API has no such Pokémon.
@@ -62,10 +65,13 @@ type Pokemon struct {
 
 // Options configures a Client. Zero values select production defaults.
 type Options struct {
-	BaseURL    string           // default https://pokeapi.co/api/v2
-	CacheDir   string           // empty disables the disk cache
-	HTTPClient *http.Client     // default: DefaultTimeout
-	Now        func() time.Time // default time.Now
+	BaseURL string // default https://pokeapi.co/api/v2
+	// SpriteBaseURL is where SpriteByID finds "<number>.png". Default: the
+	// PokeAPI sprite repository.
+	SpriteBaseURL string
+	CacheDir      string           // empty disables the disk cache
+	HTTPClient    *http.Client     // default: DefaultTimeout
+	Now           func() time.Time // default time.Now
 }
 
 // DefaultCacheDir returns os.UserCacheDir()/pokedex.
@@ -80,10 +86,11 @@ func DefaultCacheDir() (string, error) {
 // Client talks to PokeAPI and caches what it fetched. It is safe for
 // concurrent use.
 type Client struct {
-	base string
-	dir  string
-	hc   *http.Client
-	now  func() time.Time
+	base       string
+	spriteBase string
+	dir        string
+	hc         *http.Client
+	now        func() time.Time
 
 	mu      sync.Mutex
 	list    *listCache
@@ -117,6 +124,9 @@ func New(o Options) *Client {
 	}
 	if c.base == "" {
 		c.base = defaultBaseURL
+	}
+	if c.spriteBase = strings.TrimRight(o.SpriteBaseURL, "/"); c.spriteBase == "" {
+		c.spriteBase = defaultSpriteBase
 	}
 	if c.hc == nil {
 		c.hc = &http.Client{Timeout: DefaultTimeout}
@@ -374,28 +384,44 @@ func (c *Client) Sprite(ctx context.Context, p *Pokemon) ([]byte, error) {
 		return nil, fmt.Errorf("pokeapi: unsupported sprite URL %q", p.SpriteURL)
 	}
 
+	return c.spriteImage(ctx, p.ID, p.SpriteURL)
+}
+
+// SpriteByID returns the sprite of the Pokémon with that number, from the
+// sprite repository, for the result rows (the list has no sprite URLs).
+// It shares its cache with Sprite. A number with no image is ErrNotFound.
+func (c *Client) SpriteByID(ctx context.Context, id int) ([]byte, error) {
+	if id <= 0 {
+		return nil, fmt.Errorf("pokeapi: invalid Pokémon number %d", id)
+	}
+	return c.spriteImage(ctx, id, c.spriteBase+"/"+strconv.Itoa(id)+".png")
+}
+
+// spriteImage returns the PNG of Pokémon number id: from memory, then from
+// disk, then from url.
+func (c *Client) spriteImage(ctx context.Context, id int, url string) ([]byte, error) {
 	c.mu.Lock()
-	b, ok := c.sprites[p.ID]
+	b, ok := c.sprites[id]
 	c.mu.Unlock()
 	if ok {
 		return b, nil
 	}
 
-	file := filepath.Join("sprites", strconv.Itoa(p.ID)+".png")
+	file := filepath.Join("sprites", strconv.Itoa(id)+".png")
 	if b, ok = c.readFile(file); !ok || !isPNG(b) {
 		var err error
-		if b, err = c.fetch(ctx, p.SpriteURL); err != nil {
+		if b, err = c.fetch(ctx, url); err != nil {
 			return nil, err
 		}
 		// Do not keep a captive-portal page or a truncated file forever.
 		if !isPNG(b) {
-			return nil, fmt.Errorf("pokeapi: sprite %s is not a PNG image", p.SpriteURL)
+			return nil, fmt.Errorf("pokeapi: sprite %s is not a PNG image", url)
 		}
 		c.writeFile(file, b)
 	}
 
 	c.mu.Lock()
-	c.sprites[p.ID] = b
+	c.sprites[id] = b
 	c.mu.Unlock()
 	return b, nil
 }

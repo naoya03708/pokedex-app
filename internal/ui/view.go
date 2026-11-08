@@ -18,6 +18,13 @@ const (
 	// numberColumnWidth is the width of the Pokédex number in a result row. It
 	// holds "#10196", the longest number (a form), on one line.
 	numberColumnWidth = 56
+
+	// thumbSize is the side of a result row's sprite. The slot has this size
+	// whether or not there is an image, so rows do not change with it.
+	thumbSize = 40
+	// maxBitmaps bounds the decoded row sprites kept in memory (about 17 KB
+	// each at 64x64 pixels, but a long scroll would otherwise keep them all).
+	maxBitmaps = 300
 )
 
 // View draws the search box, the result list and the detail pane. Its fields
@@ -37,10 +44,16 @@ type View struct {
 	// The decoded sprite of bitmapOf, made once rather than in every frame.
 	bitmap   *mui.Bitmap
 	bitmapOf string
+
+	// The decoded row sprites by Pokédex number. A nil value is an image that
+	// does not decode.
+	thumbs map[int]*mui.Bitmap
 }
 
 // New returns a View of m.
-func New(m *app.Model) *View { return &View{m: m, split: 260, cursor: -1} }
+func New(m *app.Model) *View {
+	return &View{m: m, split: 260, cursor: -1, thumbs: map[int]*mui.Bitmap{}}
+}
 
 // Build is the window's view function. It runs on the UI thread.
 func (v *View) Build(c *mui.Context) {
@@ -96,7 +109,8 @@ func (v *View) rows(c *mui.Context) {
 	clicked := -1
 	list := mui.List(c, &v.list, len(vis)).Grow(1).Rows(func(r mui.ListRow) {
 		e := vis[r.Index]
-		row := mui.Row(r.Context).Gap(8).Padding(6, 10).Children(func() {
+		row := mui.Row(r.Context).Gap(8).Padding(6, 10).AlignItems(mui.Center).Children(func() {
+			v.thumb(r.Context, e.ID)
 			mui.Textf(r.Context, "#%03d", e.ID).TextColor(rowNumberColor(th, r.Selected())).
 				Width(numberColumnWidth).NoWrap()
 			mui.Text(r.Context, e.Name)
@@ -113,6 +127,37 @@ func (v *View) rows(c *mui.Context) {
 	case list.Submitted() && v.cursor >= 0 && v.cursor < len(vis):
 		choose(v.cursor)
 	}
+}
+
+// thumb is the small sprite of a result row, or an empty slot of the same size
+// until it is fetched (or if there is none). Asking for it is idempotent.
+func (v *View) thumb(c *mui.Context, id int) {
+	v.m.RequestThumb(id)
+	if bm := v.thumbBitmap(id); bm != nil {
+		mui.Image(c, bm).Size(thumbSize, thumbSize).Fit(mui.Contain)
+		return
+	}
+	mui.Column(c).Size(thumbSize, thumbSize)
+}
+
+// thumbBitmap decodes the sprite of a row once.
+func (v *View) thumbBitmap(id int) *mui.Bitmap {
+	if bm, ok := v.thumbs[id]; ok {
+		return bm
+	}
+	png, st := v.m.Thumb(id)
+	if st != app.Ready {
+		return nil
+	}
+	if len(v.thumbs) >= maxBitmaps {
+		clear(v.thumbs) // decoded again, from the model's bytes, if scrolled back to
+	}
+	var bm *mui.Bitmap
+	if b, err := mui.DecodeBitmap(png); err == nil {
+		bm = b.Pixelated()
+	}
+	v.thumbs[id] = bm
+	return bm
 }
 
 func (v *View) detail(c *mui.Context) {

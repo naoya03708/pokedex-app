@@ -772,3 +772,132 @@ func TestGet_FR5_OldCacheIsStillShownWhenTheRefetchFails(t *testing.T) {
 		t.Fatalf("got %+v, %v", p, err)
 	}
 }
+
+// thumbAPI serves /sprites/<n>.png for 25 and 26 only, as the sprite
+// repository does for numbers it has an image for.
+func thumbAPI(t *testing.T) *fakeAPI {
+	t.Helper()
+	return newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/sprites/25.png", "/sprites/26.png":
+			w.Write([]byte(pngBytes))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
+func newThumbClient(f *fakeAPI, dir string) *pokeapi.Client {
+	return pokeapi.New(pokeapi.Options{BaseURL: f.srv.URL, SpriteBaseURL: f.srv.URL + "/sprites", CacheDir: dir})
+}
+
+func TestSpriteByID_FR6_FetchesFromTheNumberedURL(t *testing.T) {
+	c := newThumbClient(thumbAPI(t), t.TempDir())
+
+	b, err := c.SpriteByID(context.Background(), 25)
+
+	if err != nil || string(b) != pngBytes {
+		t.Fatalf("got %q, %v", b, err)
+	}
+}
+
+func TestSpriteByID_FR6_NoImageForThatNumberIsNotFound(t *testing.T) {
+	c := newThumbClient(thumbAPI(t), t.TempDir())
+
+	_, err := c.SpriteByID(context.Background(), 10196)
+
+	if !errors.Is(err, pokeapi.ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestSpriteByID_FR6_CachedInMemoryAndOnDisk(t *testing.T) {
+	api := thumbAPI(t)
+	dir := t.TempDir()
+	c := newThumbClient(api, dir)
+	c.SpriteByID(context.Background(), 25)
+	c.SpriteByID(context.Background(), 25)
+
+	b, err := newThumbClient(api, dir).SpriteByID(context.Background(), 25)
+
+	if err != nil || string(b) != pngBytes {
+		t.Fatalf("next launch: %q, %v", b, err)
+	}
+	if api.hits.Load() != 1 {
+		t.Fatalf("requests = %d, want 1", api.hits.Load())
+	}
+}
+
+func TestSpriteByID_FR6_SharesTheCacheWithTheDetailSprite(t *testing.T) {
+	api, p := spriteAPI(t) // the detail sprite of #25 comes from /img/25.png
+	dir := t.TempDir()
+	c := pokeapi.New(pokeapi.Options{BaseURL: api.srv.URL, SpriteBaseURL: api.srv.URL + "/sprites", CacheDir: dir})
+	if _, err := c.Sprite(context.Background(), p); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := c.SpriteByID(context.Background(), 25)
+
+	if err != nil || string(b) != pngBytes {
+		t.Fatalf("got %q, %v", b, err)
+	}
+	if api.hits.Load() != 1 {
+		t.Fatalf("requests = %d, want 1 (the row reuses the detail image)", api.hits.Load())
+	}
+}
+
+func TestSpriteByID_FR3_NonPNGResponseIsRejectedAndNotCached(t *testing.T) {
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("<html>portal</html>")) })
+	dir := t.TempDir()
+	c := newThumbClient(api, dir)
+
+	_, err := c.SpriteByID(context.Background(), 25)
+
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "sprites", "25.png")); err == nil {
+		t.Fatal("the non-PNG body was cached")
+	}
+}
+
+func TestSpriteByID_RejectsInvalidNumber(t *testing.T) {
+	c := newThumbClient(thumbAPI(t), t.TempDir())
+
+	for _, id := range []int{0, -1} {
+		if _, err := c.SpriteByID(context.Background(), id); err == nil {
+			t.Errorf("id %d: want an error", id)
+		}
+	}
+}
+
+func TestSpriteByID_FR4_CanceledContextStopsRequest(t *testing.T) {
+	c := newThumbClient(thumbAPI(t), "")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := c.SpriteByID(ctx, 25)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestNew_FR6_DefaultSpriteBaseIsThePokeAPISpriteRepository(t *testing.T) {
+	var got string
+	hc := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		got = r.URL.String()
+		return nil, errors.New("stop")
+	})}
+	c := pokeapi.New(pokeapi.Options{HTTPClient: hc})
+
+	c.SpriteByID(context.Background(), 25)
+
+	if got != "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png" {
+		t.Fatalf("url = %q", got)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
