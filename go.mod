@@ -8,7 +8,7 @@ tool (
 )
 
 require (
-	github.com/egoist/mygo v0.7.3
+	github.com/egoist/mygo v0.7.4
 	go.yaml.in/yaml/v3 v3.0.6
 )
 
