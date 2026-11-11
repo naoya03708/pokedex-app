@@ -61,29 +61,30 @@ func (v *View) Build(c *mui.Context) {
 	v.m.SyncAdvanced()
 	v.syncCursor()
 	mui.Column(c).Fill().Padding(12).Gap(10).Children(func() {
-		// The search box and the advanced panel's toggle are one group, so the
-		// toggle costs little height: the detail pane must still fit the
-		// minimum window (FR-2).
-		mui.Column(c).Gap(2).Children(func() {
-			mui.SearchField(c, &v.m.Query).Label("Search Pokémon")
-			v.advanced(c)
+		// The toggle sits beside the search box, so a closed panel costs no
+		// height: the detail pane must still fit the minimum window (FR-2).
+		mui.Row(c).Gap(8).AlignItems(mui.Center).Children(func() {
+			mui.SearchField(c, &v.m.Query).Label("Search Pokémon").Grow(1)
+			mui.Button(c, "Advanced search").OnClick(func() { v.m.AdvancedOpen = !v.m.AdvancedOpen })
 		})
+		v.advanced(c)
 		mui.Split(c, &v.split, func() { v.results(c) }, func() { v.detail(c) }).Grow(1)
 	})
 }
 
-// advanced is the advanced search: a panel that opens under the search box
-// with a drop-down for each condition. The choices live in the model, which
-// fetches what they need; a closed panel switches them all off.
+// advanced is the advanced search panel, under the search box while it is
+// open, with a drop-down for each condition. The choices live in the model,
+// which fetches what they need; a closed panel switches them all off.
 func (v *View) advanced(c *mui.Context) {
 	m := v.m
-	mui.Collapsible(c, "Advanced search", &m.AdvancedOpen, func() {
-		mui.Row(c).Gap(12).Padding(6, 0).AlignItems(mui.End).Children(func() {
-			condition(c, "Generation", &m.Generation, app.Labels(app.AnyGeneration, app.Generations))
-			condition(c, "Type", &m.Type, app.Labels(app.AnyType, app.Types))
-			condition(c, "Egg group", &m.EggGroup, app.Labels(app.AnyEggGroup, app.EggGroups))
-			mui.Button(c, "Clear filters").OnClick(m.ClearAdvanced)
-		})
+	if !m.AdvancedOpen {
+		return
+	}
+	mui.Row(c).Gap(12).AlignItems(mui.End).Children(func() {
+		condition(c, "Generation", &m.Generation, app.Labels(app.AnyGeneration, app.Generations))
+		condition(c, "Type", &m.Type, app.Labels(app.AnyType, app.Types))
+		condition(c, "Egg group", &m.EggGroup, app.Labels(app.AnyEggGroup, app.EggGroups))
+		mui.Button(c, "Clear filters").OnClick(m.ClearAdvanced)
 	})
 }
 
