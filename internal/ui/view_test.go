@@ -53,6 +53,8 @@ type fakeSource struct {
 	// spriteByID is for the result rows. The harness default never answers, so
 	// the rows' fetches do not interleave with the posts other tests count.
 	spriteByID func(ctx context.Context, id int) ([]byte, error)
+	// members is for the advanced search; the default has no sets.
+	members func(ctx context.Context, kind pokeapi.Kind, key string) ([]int, error)
 }
 
 func (f fakeSource) List(ctx context.Context) ([]pokeapi.Entry, error) { return f.list(ctx) }
@@ -69,6 +71,10 @@ func (f fakeSource) Description(ctx context.Context, p *pokeapi.Pokemon) (string
 
 func (f fakeSource) SpriteByID(ctx context.Context, id int) ([]byte, error) {
 	return f.spriteByID(ctx, id)
+}
+
+func (f fakeSource) Members(ctx context.Context, kind pokeapi.Kind, key string) ([]int, error) {
+	return f.members(ctx, kind, key)
 }
 
 func okList(context.Context) ([]pokeapi.Entry, error) { return entries, nil }
@@ -312,6 +318,7 @@ func TestUI_FR2_KeyboardArrowsMoveAndEnterSelects(t *testing.T) {
 	h.start()
 
 	h.tt.Key(0, mui.KeyTab) // search box
+	h.tt.Key(0, mui.KeyTab) // advanced search toggle (FR-7)
 	h.tt.Key(0, mui.KeyTab) // result list
 	h.tt.Key(0, mui.KeyDown)
 	h.tt.Key(0, mui.KeyDown) // second row: pikachu

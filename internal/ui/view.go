@@ -40,6 +40,7 @@ type View struct {
 	synced      bool
 	syncedQuery string
 	syncedCount int
+	syncedRev   int
 
 	// The decoded sprite of bitmapOf, made once rather than in every frame.
 	bitmap   *mui.Bitmap
@@ -57,10 +58,40 @@ func New(m *app.Model) *View {
 
 // Build is the window's view function. It runs on the UI thread.
 func (v *View) Build(c *mui.Context) {
+	v.m.SyncAdvanced()
 	v.syncCursor()
 	mui.Column(c).Fill().Padding(12).Gap(10).Children(func() {
-		mui.SearchField(c, &v.m.Query).Label("Search Pokémon")
+		// The search box and the advanced panel's toggle are one group, so the
+		// toggle costs little height: the detail pane must still fit the
+		// minimum window (FR-2).
+		mui.Column(c).Gap(2).Children(func() {
+			mui.SearchField(c, &v.m.Query).Label("Search Pokémon")
+			v.advanced(c)
+		})
 		mui.Split(c, &v.split, func() { v.results(c) }, func() { v.detail(c) }).Grow(1)
+	})
+}
+
+// advanced is the advanced search: a panel that opens under the search box
+// with a drop-down for each condition. The choices live in the model, which
+// fetches what they need; a closed panel switches them all off.
+func (v *View) advanced(c *mui.Context) {
+	m := v.m
+	mui.Collapsible(c, "Advanced search", &m.AdvancedOpen, func() {
+		mui.Row(c).Gap(12).Padding(6, 0).AlignItems(mui.End).Children(func() {
+			condition(c, "Generation", &m.Generation, app.Labels(app.AnyGeneration, app.Generations))
+			condition(c, "Type", &m.Type, app.Labels(app.AnyType, app.Types))
+			condition(c, "Egg group", &m.EggGroup, app.Labels(app.AnyEggGroup, app.EggGroups))
+			mui.Button(c, "Clear filters").OnClick(m.ClearAdvanced)
+		})
+	})
+}
+
+// condition is a labeled drop-down bound to one condition of the model.
+func condition(c *mui.Context, label string, selected *string, options []string) {
+	mui.Column(c).Gap(4).Children(func() {
+		mui.Text(c, label).TextColor(c.Theme().TextMuted)
+		mui.Select(c, selected, options)
 	})
 }
 
@@ -68,10 +99,11 @@ func (v *View) Build(c *mui.Context) {
 // change (a new query, or the list arriving), or on nothing if it is hidden.
 func (v *View) syncCursor() {
 	vis := v.m.Visible()
-	if v.synced && v.syncedQuery == v.m.Query && v.syncedCount == len(vis) {
+	rev := v.m.Rev()
+	if v.synced && v.syncedQuery == v.m.Query && v.syncedCount == len(vis) && v.syncedRev == rev {
 		return
 	}
-	v.synced, v.syncedQuery, v.syncedCount = true, v.m.Query, len(vis)
+	v.synced, v.syncedQuery, v.syncedCount, v.syncedRev = true, v.m.Query, len(vis), rev
 	v.cursor = -1
 	for i, e := range vis {
 		if e.Name == v.m.Selected {
@@ -88,6 +120,10 @@ func (v *View) results(c *mui.Context) {
 		retryMessage(c, fmt.Sprintf("Could not load the Pokémon list: %v", m.ListErr), m.Retry)
 	case m.ListStatus != app.Ready:
 		loading(c, "Loading Pokémon…")
+	case m.FilterStatus == app.Failed:
+		retryMessage(c, fmt.Sprintf("Could not load the filter: %v", m.FilterErr), m.Retry)
+	case m.FilterStatus == app.Loading:
+		loading(c, "Loading filter…")
 	case m.NoResults():
 		mui.Text(c, "No Pokémon found").TextColor(c.Theme().TextMuted).Padding(12)
 	default:

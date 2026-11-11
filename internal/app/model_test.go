@@ -26,6 +26,8 @@ type fakeSource struct {
 	description func(ctx context.Context, p *pokeapi.Pokemon) (string, error)
 	// spriteByID is optional: only the result rows ask for it.
 	spriteByID func(ctx context.Context, id int) ([]byte, error)
+	// members is optional: only the advanced search asks for it.
+	members func(ctx context.Context, kind pokeapi.Kind, key string) ([]int, error)
 }
 
 func (f fakeSource) List(ctx context.Context) ([]pokeapi.Entry, error) { return f.list(ctx) }
@@ -43,6 +45,10 @@ func (f fakeSource) Description(ctx context.Context, p *pokeapi.Pokemon) (string
 
 func (f fakeSource) SpriteByID(ctx context.Context, id int) ([]byte, error) {
 	return f.spriteByID(ctx, id)
+}
+
+func (f fakeSource) Members(ctx context.Context, kind pokeapi.Kind, key string) ([]int, error) {
+	return f.members(ctx, kind, key)
 }
 
 func okList(context.Context) ([]pokeapi.Entry, error) { return entries, nil }
