@@ -97,6 +97,7 @@ type Client struct {
 	details map[string]*Pokemon
 	sprites map[int][]byte
 	descs   map[int]string // by species ID; "" means the species has no English text
+	members map[string]*membersCache
 }
 
 type listCache struct {
@@ -121,6 +122,7 @@ func New(o Options) *Client {
 		details: map[string]*Pokemon{},
 		sprites: map[int][]byte{},
 		descs:   map[int]string{},
+		members: map[string]*membersCache{},
 	}
 	if c.base == "" {
 		c.base = defaultBaseURL
