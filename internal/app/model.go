@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"sync"
 
@@ -18,6 +19,7 @@ type Source interface {
 	Sprite(ctx context.Context, p *pokeapi.Pokemon) ([]byte, error)
 	Description(ctx context.Context, p *pokeapi.Pokemon) (string, error)
 	SpriteByID(ctx context.Context, id int) ([]byte, error)
+	Members(ctx context.Context, kind pokeapi.Kind, key string) ([]int, error)
 }
 
 // maxThumbFetches is how many row sprites are fetched at the same time.
@@ -40,6 +42,14 @@ type Poster func(fn func())
 // on the UI thread only; background work reports back through the Poster.
 type Model struct {
 	Query string // bound to the search box
+
+	// The advanced search: the panel and the label of each condition, bound to
+	// the widgets. The Any… labels (or "") mean no condition. While the panel is
+	// closed all conditions are off, but the choices are kept.
+	AdvancedOpen               bool
+	Generation, Type, EggGroup string
+	FilterStatus               Status // of the sets the conditions need
+	FilterErr                  error
 
 	ListStatus Status
 	ListErr    error
@@ -69,10 +79,19 @@ type Model struct {
 	thumbSlot chan struct{} // holds one token per running thumb fetch
 
 	entries   []pokeapi.Entry
-	visible   []pokeapi.Entry // Filter(entries, visQuery), valid if visOK
+	visible   []pokeapi.Entry // the rows matching Query and the loaded conditions, valid if visOK
 	visQuery  string
 	visOK     bool
+	visRev    int // counts the times visible was recomputed
 	detailGen int
+
+	// The advanced search. applied are the conditions in force, sets the ID
+	// sets fetched so far (kept for the session: a set is never fetched twice),
+	// and filterGen tells the running fetch from an older one.
+	applied      []cond
+	sets         map[cond]map[int]struct{}
+	filterGen    int
+	cancelFilter context.CancelFunc
 	// cancelDetail cancels the running detail fetch, if any.
 	cancelDetail context.CancelFunc
 }
@@ -81,8 +100,9 @@ type Model struct {
 func New(src Source, post Poster) *Model {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Model{
+		Generation: AnyGeneration, Type: AnyType, EggGroup: AnyEggGroup,
 		src: src, post: post, ctx: ctx, cancel: cancel,
-		thumbs: map[int]thumb{}, thumbSlot: make(chan struct{}, maxThumbFetches),
+		sets: map[cond]map[int]struct{}{}, thumbs: map[int]thumb{}, thumbSlot: make(chan struct{}, maxThumbFetches),
 	}
 }
 
@@ -152,12 +172,14 @@ func (m *Model) Start() {
 	}()
 }
 
-// Retry repeats the fetch that failed: the list, otherwise the selected
-// detail.
+// Retry repeats the fetch that failed: the list, then the advanced search's
+// sets, otherwise the selected detail.
 func (m *Model) Retry() {
 	switch {
 	case m.ListStatus == Failed:
 		m.Start()
+	case m.FilterStatus == Failed:
+		m.fetchFilters()
 	case m.DetailStatus == Failed:
 		m.fetchDetail(m.Selected)
 	}
@@ -255,18 +277,160 @@ func (m *Model) Close() {
 	m.cancel()
 }
 
+// cond is one condition of the advanced search: the members of a resource.
+type cond struct {
+	kind pokeapi.Kind
+	key  string
+}
+
+// wanted returns the conditions the bound fields ask for. A closed panel asks
+// for none.
+func (m *Model) wanted() []cond {
+	if !m.AdvancedOpen {
+		return nil
+	}
+	var out []cond
+	for _, f := range []struct {
+		kind  pokeapi.Kind
+		label string
+		cs    []Choice
+	}{
+		{pokeapi.KindGeneration, m.Generation, Generations},
+		{pokeapi.KindType, m.Type, Types},
+		{pokeapi.KindEggGroup, m.EggGroup, EggGroups},
+	} {
+		for _, c := range f.cs {
+			if c.Label == f.label {
+				out = append(out, cond{f.kind, c.Key})
+				break
+			}
+		}
+	}
+	return out
+}
+
+// SyncAdvanced applies the conditions chosen in the bound fields: it fetches
+// the sets it does not have yet, and the rows follow. It does nothing when the
+// conditions are as they were, so the view may call it in every frame.
+func (m *Model) SyncAdvanced() {
+	if m.closed {
+		return
+	}
+	if want := m.wanted(); !slices.Equal(want, m.applied) {
+		m.applied = want
+		m.fetchFilters()
+	}
+}
+
+// ClearAdvanced sets the three conditions to their Any… choice. The name query stays.
+func (m *Model) ClearAdvanced() {
+	m.Generation, m.Type, m.EggGroup = AnyGeneration, AnyType, AnyEggGroup
+}
+
+// fetchFilters fetches the sets of the applied conditions that are missing.
+// An older fetch is canceled and its result discarded.
+func (m *Model) fetchFilters() {
+	if m.cancelFilter != nil {
+		m.cancelFilter()
+		m.cancelFilter = nil
+	}
+	m.filterGen++
+	m.visOK = false
+	m.FilterErr = nil
+
+	var missing []cond
+	for _, c := range m.applied {
+		if _, ok := m.sets[c]; !ok {
+			missing = append(missing, c)
+		}
+	}
+	if len(missing) == 0 {
+		m.FilterStatus = Idle
+		if len(m.applied) > 0 {
+			m.FilterStatus = Ready
+		}
+		return
+	}
+	m.FilterStatus = Loading
+
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.cancelFilter = cancel
+	gen, src, post := m.filterGen, m.src, m.post
+	go func() {
+		defer cancel()
+		got := make(map[cond]map[int]struct{}, len(missing))
+		for _, c := range missing {
+			ids, err := src.Members(ctx, c.kind, c.key)
+			if err != nil {
+				post(func() {
+					if m.closed || gen != m.filterGen {
+						return
+					}
+					m.FilterStatus, m.FilterErr = Failed, err
+				})
+				return
+			}
+			set := make(map[int]struct{}, len(ids))
+			for _, id := range ids {
+				set[id] = struct{}{}
+			}
+			got[c] = set
+		}
+		post(func() {
+			if m.closed || gen != m.filterGen {
+				return
+			}
+			for c, set := range got {
+				m.sets[c] = set
+			}
+			m.FilterStatus, m.visOK = Ready, false
+		})
+	}()
+}
+
 // Visible returns the entries matching Query, in Pokédex-number order. The
 // result is shared and must not be modified.
 func (m *Model) Visible() []pokeapi.Entry {
 	if !m.visOK || m.visQuery != m.Query {
-		m.visible, m.visQuery, m.visOK = Filter(m.entries, m.Query), m.Query, true
+		m.visible, m.visQuery, m.visOK = m.match(), m.Query, true
+		m.visRev++
 	}
 	return m.visible
 }
 
-// NoResults reports whether the list loaded but nothing matches Query.
+// Rev changes whenever Visible returns different rows, which lets the view
+// notice a new set of rows even if their number is the same.
+func (m *Model) Rev() int {
+	m.Visible()
+	return m.visRev
+}
+
+// match is the name search AND every applied condition whose set is loaded.
+// An entry is in a set by its number: a type lists Pokémon, a generation and an
+// egg group list species, whose IDs are the numbers of the default forms only.
+func (m *Model) match() []pokeapi.Entry {
+	rows := Filter(m.entries, m.Query)
+	for _, c := range m.applied {
+		set, ok := m.sets[c]
+		if !ok {
+			continue
+		}
+		kept := make([]pokeapi.Entry, 0, len(rows))
+		for _, e := range rows {
+			if _, in := set[e.ID]; in {
+				kept = append(kept, e)
+			}
+		}
+		rows = kept
+	}
+	return rows
+}
+
+// NoResults reports whether the list loaded, the conditions are in force, and
+// nothing matches.
 func (m *Model) NoResults() bool {
-	return m.ListStatus == Ready && len(m.Visible()) == 0
+	return m.ListStatus == Ready && m.FilterStatus != Loading && m.FilterStatus != Failed &&
+		len(m.Visible()) == 0
 }
 
 // Filter returns the entries whose name contains query, ignoring case and
