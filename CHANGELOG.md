@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0](https://github.com/naoya03708/pokedex-app/compare/v0.3.0...v0.4.0) (2026-11-12)
+
+
+### Added
+
+* add advanced search by generation, type and egg group ([#63](https://github.com/naoya03708/pokedex-app/issues/63)) ([cd02762](https://github.com/naoya03708/pokedex-app/commit/cd0276246ff0d6747fc10cf1c0506849a78e769d))
+
+
+### Fixed
+
+* **ui:** order result rows as number, name, sprite ([#60](https://github.com/naoya03708/pokedex-app/issues/60)) ([216c6fb](https://github.com/naoya03708/pokedex-app/commit/216c6fbfc1a0beacfb221312a8fb1d6c8b469578))
+
 ## [0.3.0](https://github.com/naoya03708/pokedex-app/compare/v0.2.1...v0.3.0) (2026-11-08)
 
 
