@@ -119,7 +119,7 @@ workflow ファイル自体の検査は `workflow-lint.yml` が行う (`.github/
 release-please はタグも GitHub Release も作らない (`skip-github-release`)。タグを push するのはユーザーのままで、下書きリリースの作成は `release.yml` が行う。注意点:
 - リリース PR は `GITHUB_TOKEN` で作られるので、**CI が自動では走らない**。必須チェックの `check` を走らせるには、リリース PR のブランチに空コミットを push する (`git commit --allow-empty`)。PR を close / reopen すると release-please が PR を見失うことがあるので避ける。
 - リポジトリの設定「Allow GitHub Actions to create and approve pull requests」を有効にしておく (ユーザーの作業)。
-- リリース PR をマージしたあと、次の release-please の実行が「untagged, merged release PRs」で止まることがある (タグを作らないため)。その場合はマージ済みのリリース PR のラベル `autorelease: pending` を `autorelease: tagged` に付け替える。
+- release-please はタグを作らないので、マージ済みのリリース PR のラベル `autorelease: pending` が残り、次の実行が「untagged, merged release PRs」で止まる。`vX.Y.Z` タグを push すると、`release.yml` の `mark-release-pr` ジョブが (`verify` を通ったあとで) そのリリース PR のラベルを `autorelease: tagged` に付け替える。次のリリース PR は、その後の main への push (または release-please の手動実行) で開く。タグの前に付け替えると、release-please が同じ変更を含むリリース PR をもう一度作るので、手で付け替えるのはタグを push したあとにする。
 - `version.txt` は release-please の `simple` 型が管理するファイルで、版の確認には使わない (正は `mygo.json`)。
 
 ### 成果物を Mac で試す

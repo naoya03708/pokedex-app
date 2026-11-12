@@ -53,6 +53,40 @@ jobs:
       - name: CI checks
         run: scripts/check.sh
 
+  # release-please never tags or releases (skip-github-release), so it keeps
+  # the merged release PR labeled "autorelease: pending" and refuses to open the
+  # next one ("untagged, merged release PRs outstanding"). Once the tag has
+  # passed the gate above, mark that PR as tagged. Doing it before the tag
+  # exists would make release-please propose the same changes again.
+  mark-release-pr:
+    needs: verify
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write # change the labels of the merged release PR
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Mark the release PR as tagged
+        run: |
+          version="${TAG#v}"
+          title="chore(main): release $version"
+          prs=$(gh pr list --state merged --label "autorelease: pending" \
+            --search "\"$title\" in:title" --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number")
+          if [ -z "$prs" ]; then
+            echo "::notice::No merged release PR '$title' is labeled autorelease: pending; nothing to do"
+            exit 0
+          fi
+          gh label create "autorelease: tagged" --color ededed --force
+          for pr in $prs; do
+            gh pr edit "$pr" --remove-label "autorelease: pending" --add-label "autorelease: tagged"
+            echo "Marked #$pr as tagged"
+          done
+
   package-macos:
     needs: verify
     runs-on: macos-latest
