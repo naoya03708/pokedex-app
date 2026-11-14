@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1](https://github.com/naoya03708/pokedex-app/compare/v0.4.0...v0.4.1) (2026-11-14)
+
+
+### Fixed
+
+* **app:** do not start a waiting row sprite fetch after Close ([#66](https://github.com/naoya03708/pokedex-app/issues/66)) ([e6bee71](https://github.com/naoya03708/pokedex-app/commit/e6bee7131b4aeb438927dfa9d16bcbb01a8c79a8))
+
 ## [0.4.0](https://github.com/naoya03708/pokedex-app/compare/v0.3.0...v0.4.0) (2026-11-12)
 
 
