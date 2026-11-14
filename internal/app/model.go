@@ -128,9 +128,15 @@ func (m *Model) RequestThumb(id int) {
 	m.thumbs[id] = thumb{status: Loading}
 	src, post, ctx, slot := m.src, m.post, m.ctx, m.thumbSlot
 	go func() {
+		// With a slot free and ctx canceled, select may pick either case, so
+		// check ctx afterwards: a row that waited must not start after Close.
+		// The slot taken in that case is not given back: ctx is only canceled by
+		// Close, after which no row asks for a slot again.
 		select {
 		case slot <- struct{}{}:
 		case <-ctx.Done():
+		}
+		if ctx.Err() != nil {
 			return
 		}
 		img, err := src.SpriteByID(ctx, id)
