@@ -65,7 +65,7 @@ class FetchBuildTest(unittest.TestCase):
             capture_output=True, text=True, env=e, timeout=60)
 
     def out(self, *parts):
-        return self.project / "out-artifacts" / Path(*parts)
+        return self.project / "out-artifacts" / "builds" / Path(*parts)
 
     def test_downloads_verifies_and_records_the_build(self):
         r = self.run_script()
