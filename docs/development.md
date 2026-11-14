@@ -131,7 +131,7 @@ scripts/fetch-build.sh --branch feat/x   # ブランチを指定
 scripts/fetch-build.sh --run 39088009828 # run を指定
 ```
 
-- 取得先はプロジェクトの `out-artifacts/run-<ID>/` (Git 管理外)。プロジェクトのフォルダは Mac と共有されているので、Finder からそのまま dmg を開ける。
+- 取得先はプロジェクトの `out-artifacts/builds/run-<ID>/` (公開リリースの取得先は `out-artifacts/releases/<タグ>/`) (Git 管理外)。プロジェクトのフォルダは Mac と共有されているので、Finder からそのまま dmg を開ける。
 - チェックサムを検証し、ビルドしたブランチとコミットを `BUILD_INFO.txt` に残す。**何のビルドかは、時刻ではなくこのコミットで確かめる。**
 - 成果物は 1 日で期限が切れる。切れていたら、Actions → Release → Run workflow でドライランをやり直す (ブランチを選べる)。
 - 公開済みのリリースは `gh release download vX.Y.Z --pattern '*.dmg' --pattern SHA256SUMS.txt` で取得する (リリースの操作はユーザーが行う)。

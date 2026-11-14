@@ -1,10 +1,10 @@
 #!/bin/bash
-# Downloads the macOS build of a Release workflow dry run into out-artifacts/,
+# Downloads the macOS build of a Release workflow dry run into out-artifacts/builds/run-<ID>/,
 # without a browser. Browsers (Chrome in particular) block or warn about an
 # unsigned dmg, and a file saved by gh carries no macOS quarantine flag.
 #
 # The project folder is shared with the Mac, so the dmg can be opened from
-# out-artifacts/ in Finder right after this script ends. The folder is
+# out-artifacts/builds/ in Finder right after this script ends. The folder is
 # ignored by git (.gitignore: /out*).
 #
 # Usage:
@@ -48,7 +48,7 @@ if [ -z "$run" ]; then
   fi
 fi
 
-dir="$OUT/run-$run"
+dir="$OUT/builds/run-$run"
 if [ -d "$dir" ]; then
   # Already fetched: verify it. (This also works after the artifact expired.)
   echo "$dir already exists; verifying it instead of downloading again."
