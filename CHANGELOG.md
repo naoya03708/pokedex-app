@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0](https://github.com/naoya03708/pokedex-app/compare/v0.4.1...v0.5.0) (2026-11-21)
+
+
+### Added
+
+* **app:** match names ignoring symbols and rank prefix matches first ([#74](https://github.com/naoya03708/pokedex-app/issues/74)) ([0de4436](https://github.com/naoya03708/pokedex-app/commit/0de44363bfc7b553335f68da9ebf6e91855259e9))
+
 ## [0.4.1](https://github.com/naoya03708/pokedex-app/compare/v0.4.0...v0.4.1) (2026-11-14)
 
 
