@@ -147,6 +147,20 @@ func (h *harness) click(s string) {
 	}
 }
 
+// clickRow clicks the result row of a Pokémon the way a user does, on the
+// number inside the row. (mygo 0.8's tester no longer accepts the list's own
+// row label as a click target, which is what clicking by name would find.)
+func (h *harness) clickRow(name string) {
+	h.t.Helper()
+	for _, e := range entries {
+		if e.Name == name {
+			h.click(fmt.Sprintf("#%03d", e.ID))
+			return
+		}
+	}
+	h.t.Fatalf("no row for %q in the fixture list", name)
+}
+
 func (h *harness) wantText(s string) {
 	h.t.Helper()
 	if !h.tt.HasText(s) {
@@ -270,7 +284,7 @@ func TestUI_FR2_ClickingARowShowsDetail(t *testing.T) {
 	h := newHarness(t, fakeSource{})
 	h.start()
 
-	h.click("pikachu")
+	h.clickRow("pikachu")
 	h.tt.Frame()
 	h.wantText("Loading Pikachu…")
 	h.run(1)
@@ -289,7 +303,7 @@ func TestUI_FR2_SpriteFailureShowsPlaceholderKeepingDetail(t *testing.T) {
 	}})
 	h.start()
 
-	h.click("pikachu")
+	h.clickRow("pikachu")
 	h.run(1) // detail text
 	h.wantText("Pikachu")
 	h.run(1) // sprite result: failed
@@ -302,7 +316,7 @@ func TestUI_FR2_SpriteReplacesPlaceholder(t *testing.T) {
 	h := newHarness(t, fakeSource{})
 	h.start()
 
-	h.click("pikachu")
+	h.clickRow("pikachu")
 	h.run(2)
 
 	h.wantText("Pikachu")
@@ -345,7 +359,7 @@ func TestUI_FR3_DetailErrorShowsMessageAndRetry(t *testing.T) {
 	}})
 	h.start()
 
-	h.click("pikachu")
+	h.clickRow("pikachu")
 	h.run(1)
 	h.wantText("Could not load pikachu: timeout")
 
@@ -364,8 +378,8 @@ func TestUI_FR4_StaleDetailIsNotShown(t *testing.T) {
 	}})
 	h.start()
 
-	h.click("pikachu")
-	h.click("raichu")
+	h.clickRow("pikachu")
+	h.clickRow("raichu")
 	close(release["pikachu"])
 	h.run(1) // the stale result
 	h.wantNoText("Pikachu")
@@ -380,7 +394,7 @@ func TestUI_FR4_StaleDetailIsNotShown(t *testing.T) {
 func TestUI_FR2_ArrowsContinueFromTheClickedRow(t *testing.T) {
 	h := newHarness(t, fakeSource{})
 	h.start()
-	h.click("pikachu")
+	h.clickRow("pikachu")
 	h.run(2)
 
 	h.tt.Key(0, mui.KeyDown) // raichu, the row after pikachu
@@ -396,7 +410,7 @@ func TestUI_FR2_ShowsTheTotalOfTheBaseStats(t *testing.T) {
 	h := newHarness(t, fakeSource{})
 	h.start()
 
-	h.click("pikachu")
+	h.clickRow("pikachu")
 	h.run(1)
 
 	h.wantText("Total 321") // 35 + 55 + 40 + 50 + 51 + 90
@@ -410,7 +424,7 @@ func TestUI_FR2_ShowsBothTypesOfADualTypePokemon(t *testing.T) {
 	}})
 	h.start()
 
-	h.click("pikachu")
+	h.clickRow("pikachu")
 	h.run(1)
 
 	h.wantText("fire")
@@ -420,7 +434,7 @@ func TestUI_FR2_ShowsBothTypesOfADualTypePokemon(t *testing.T) {
 func TestUI_FR2_DetailRendersInDarkModeAndAtTheMinimumWindowSize(t *testing.T) {
 	h := newHarness(t, fakeSource{})
 	h.start()
-	h.click("pikachu")
+	h.clickRow("pikachu")
 	h.run(2)
 
 	h.tt.SetDark(true)
@@ -441,7 +455,7 @@ func TestUI_FR2_LongNameAndTwoStatColumnsFitTheMinimumWindow(t *testing.T) {
 		return &p, nil
 	}})
 	h.start()
-	h.click("pikachu")
+	h.clickRow("pikachu")
 	h.run(2)
 
 	// When the window has its minimum size
@@ -475,7 +489,7 @@ func TestUI_FR5_DescriptionAppearsAfterTheDetail(t *testing.T) {
 		description: func(context.Context, *pokeapi.Pokemon) (string, error) { return "It stores electricity.", nil }})
 	h.start()
 
-	h.click("pikachu")
+	h.clickRow("pikachu")
 	h.run(1)
 	h.wantText("Base stats")
 	h.wantNoText("It stores electricity.")
@@ -489,7 +503,7 @@ func TestUI_FR5_FailedDescriptionLeavesNoGapOrError(t *testing.T) {
 		description: func(context.Context, *pokeapi.Pokemon) (string, error) { return "", errors.New("offline") }})
 	h.start()
 
-	h.click("pikachu")
+	h.clickRow("pikachu")
 	h.run(3)
 
 	h.wantText("Base stats")
@@ -602,7 +616,7 @@ func TestUI_FR6_ClickingARowWithASpriteStillShowsItsDetail(t *testing.T) {
 	h.start()
 	h.run(len(entries))
 
-	h.click("pikachu")
+	h.clickRow("pikachu")
 
 	h.wantText("#025")
 	h.wantText("Pikachu")
