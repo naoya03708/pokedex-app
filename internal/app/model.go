@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/naoya03708/pokedex-app/internal/pokeapi"
 )
@@ -439,18 +440,36 @@ func (m *Model) NoResults() bool {
 		len(m.Visible()) == 0
 }
 
-// Filter returns the entries whose name contains query, ignoring case and
-// surrounding spaces, keeping their order. An empty query matches all.
+// Filter returns the entries whose name matches query, as FR-8 says: both are
+// lowercased and stripped of everything but letters and digits first, so
+// "mr mime", "Mr.Mime" and "mr-mime" all find mr-mime. Names that start with
+// the query come before names that only contain it; inside each group the
+// order of entries is kept. A query without letters or digits matches all.
 func Filter(entries []pokeapi.Entry, query string) []pokeapi.Entry {
-	q := strings.ToLower(strings.TrimSpace(query))
+	q := normalize(query)
 	if q == "" {
 		return entries
 	}
-	var out []pokeapi.Entry
+	var prefix, inside []pokeapi.Entry
 	for _, e := range entries {
-		if strings.Contains(strings.ToLower(e.Name), q) {
-			out = append(out, e)
+		n := normalize(e.Name)
+		switch {
+		case strings.HasPrefix(n, q):
+			prefix = append(prefix, e)
+		case strings.Contains(n, q):
+			inside = append(inside, e)
 		}
 	}
-	return out
+	return append(prefix, inside...)
+}
+
+// normalize lowercases s and drops everything that is not a letter or a digit.
+func normalize(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
